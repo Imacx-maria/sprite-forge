@@ -94,3 +94,11 @@ See the `docs/` folder for complete product specifications, including:
 ## License
 
 Private — not for redistribution.
+
+## Documentation
+
+Project documentation and design specs live in the separate docs folder/repo:
+SPRITIFY (Phase 0 source of truth)
+
+These docs define the system.
+This repository implements it.
