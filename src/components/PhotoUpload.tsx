@@ -23,17 +23,24 @@ export function PhotoUpload({ onSuccess }: PhotoUploadProps) {
   const { setPhotoFromFile, photo } = usePhoto();
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setError(null);
-      const result = setPhotoFromFile(file, "upload");
+      setIsProcessing(true);
 
-      if (!result.valid && result.error) {
-        setError(result.error);
-      } else if (result.valid && onSuccess) {
-        onSuccess();
+      try {
+        const result = await setPhotoFromFile(file, "upload");
+
+        if (!result.valid && result.error) {
+          setError(result.error);
+        } else if (result.valid && onSuccess) {
+          onSuccess();
+        }
+      } finally {
+        setIsProcessing(false);
       }
     },
     [setPhotoFromFile, onSuccess]
@@ -126,15 +133,16 @@ export function PhotoUpload({ onSuccess }: PhotoUploadProps) {
       {/* Drop zone */}
       <div
         role="button"
-        tabIndex={0}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        tabIndex={isProcessing ? -1 : 0}
+        onClick={isProcessing ? undefined : handleClick}
+        onKeyDown={isProcessing ? undefined : handleKeyDown}
+        onDragOver={isProcessing ? undefined : handleDragOver}
+        onDragLeave={isProcessing ? undefined : handleDragLeave}
+        onDrop={isProcessing ? undefined : handleDrop}
         className={`
-          flex h-64 w-full max-w-md cursor-pointer flex-col items-center justify-center
+          flex h-64 w-full max-w-md flex-col items-center justify-center
           border-4 border-dashed transition-colors
+          ${isProcessing ? "cursor-wait opacity-50" : "cursor-pointer"}
           ${
             isDragging
               ? "border-white bg-white/10"
@@ -142,22 +150,33 @@ export function PhotoUpload({ onSuccess }: PhotoUploadProps) {
           }
         `}
         aria-label="Drop zone for photo upload"
+        aria-busy={isProcessing}
       >
         <div className="flex flex-col items-center gap-4 px-6 text-center">
           {/* Icon placeholder - simple ASCII art */}
-          <div className="text-4xl text-[#666666]">[+]</div>
+          <div className="text-4xl text-[#666666]">
+            {isProcessing ? "[...]" : "[+]"}
+          </div>
 
           <p className="text-xl tracking-wide text-[#888888]">
-            {isDragging ? "DROP IT!" : "DROP YOUR PHOTO HERE"}
+            {isProcessing
+              ? "PROCESSING..."
+              : isDragging
+                ? "DROP IT!"
+                : "DROP YOUR PHOTO HERE"}
           </p>
 
-          <p className="text-lg tracking-wide text-[#666666]">
-            — OR —
-          </p>
+          {!isProcessing && (
+            <>
+              <p className="text-lg tracking-wide text-[#666666]">
+                — OR —
+              </p>
 
-          <p className="text-xl tracking-wide text-white">
-            CLICK TO SELECT
-          </p>
+              <p className="text-xl tracking-wide text-white">
+                CLICK TO SELECT
+              </p>
+            </>
+          )}
 
           <p className="mt-2 text-sm tracking-wide text-[#444444]">
             {PHOTO_CONSTRAINTS.ALLOWED_EXTENSIONS.join(" / ")} &bull; MAX{" "}
