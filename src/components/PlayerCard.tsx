@@ -41,9 +41,8 @@ export function PlayerCard({
 
   // Compose card when character image changes
   useEffect(() => {
+    // Only compose if we have an image
     if (!characterImage) {
-      setCardState("idle");
-      setCardDataUrl(null);
       return;
     }
 
@@ -84,6 +83,17 @@ export function PlayerCard({
       downloadCard(cardDataUrl, `sprite-forge-card-${timestamp}.png`);
     }
   }, [cardDataUrl]);
+
+  // If no character image, show idle state directly
+  if (!characterImage) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex h-64 w-48 items-center justify-center border-4 border-dashed border-[#333333]">
+          <p className="text-lg tracking-wide text-[#444444]">NO CARD</p>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (cardState === "composing") {
@@ -151,11 +161,13 @@ export function PlayerCard({
     );
   }
 
-  // Idle state (no image)
+  // Composing or idle state - show composing indicator
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="flex h-64 w-48 items-center justify-center border-4 border-dashed border-[#333333]">
-        <p className="text-lg tracking-wide text-[#444444]">NO CARD</p>
+      <div className="flex h-64 w-48 items-center justify-center border-4 border-dashed border-[#444444]">
+        <p className="animate-pulse text-lg tracking-wide text-[#888888]">
+          COMPOSING...
+        </p>
       </div>
     </div>
   );

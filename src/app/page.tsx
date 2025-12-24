@@ -3,9 +3,9 @@
 /**
  * SPRITE FORGE — Main Application
  *
- * Phase 5: Player Card generation with download
+ * V1.0 Launch Ready
  * - Panel 00: Title / Attract Screen
- * - Panel 01: Photo Input, Generation, Player Card & Download
+ * - Panel 01: Photo Input, World Selection, Generation, Player Card & Download
  *
  * Navigation handled via PhotoContext state.
  * All data is held in memory only (no persistence).
@@ -57,7 +57,7 @@ function Panel00TitleScreen() {
 
         {/* Footer hint */}
         <p className="absolute bottom-8 text-sm tracking-wide text-[#444444]">
-          v0.4.0 — PHASE 5
+          v1.0.0
         </p>
       </main>
     </div>

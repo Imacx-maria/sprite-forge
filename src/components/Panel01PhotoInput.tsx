@@ -116,7 +116,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.5.0 — PHASE 6
+            v1.0.0
           </p>
         </main>
       </div>
@@ -154,7 +154,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.5.0 — PHASE 6
+            v1.0.0
           </p>
         </main>
       </div>
@@ -291,7 +291,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
         {/* Version footer */}
         <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-          v0.5.0 — PHASE 6
+          v1.0.0
         </p>
       </main>
     </div>
