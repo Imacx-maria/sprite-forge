@@ -2,6 +2,7 @@
  * AI Generation Types
  *
  * Phase 4: Type definitions for AI image generation
+ * Phase 8: Extended for dual-output generation (Player Card + World Scene)
  * Provider-agnostic interfaces for the abstraction layer
  */
 
@@ -43,6 +44,7 @@ export type GenerationErrorCode =
   | "RATE_LIMIT"
   | "INVALID_REQUEST"
   | "GENERATION_FAILED"
+  | "MODEL_RETURNED_TEXT"
   | "UNKNOWN";
 
 /**
@@ -66,4 +68,21 @@ export interface ProviderConfig {
   model: string;
   /** Request timeout in milliseconds */
   timeout?: number;
+}
+
+/**
+ * Dual-output generation response
+ * Phase 8: Returns both Player Card and World Scene images
+ */
+export interface DualGenerationResponse {
+  /** Whether at least one generation succeeded */
+  success: boolean;
+  /** Player Card generation result */
+  cardImage?: GenerateImageResponse;
+  /** World Scene generation result */
+  worldSceneImage?: GenerateImageResponse;
+  /** Overall error message (if both failed) */
+  error?: string;
+  /** Overall error code (if both failed) */
+  errorCode?: GenerationErrorCode;
 }

@@ -5,6 +5,7 @@
  *
  * Phase 4: Manages photo data and generation in memory only.
  * Phase 6: World selection for prompt variation
+ * Phase 8: Dual-output generation (Player Card + World Scene)
  *
  * - No persistence (localStorage, cookies, etc.)
  * - No server-side storage
@@ -28,9 +29,32 @@ import type {
 } from "@/types/photo";
 import { PHOTO_CONSTRAINTS } from "@/types/photo";
 import { DEFAULT_WORLD_ID, getWorld, type WorldId } from "@/lib/worlds";
+import { resizeImage } from "@/lib/image";
 
 /**
- * Generation result from the API
+ * Single image generation result
+ */
+interface SingleImageResult {
+  success: boolean;
+  imageBase64?: string;
+  mimeType?: string;
+  error?: string;
+  errorCode?: string;
+}
+
+/**
+ * Dual-output generation result from the API (Phase 8)
+ */
+interface DualGenerationResult {
+  success: boolean;
+  cardImage?: SingleImageResult;
+  worldSceneImage?: SingleImageResult;
+  error?: string;
+  errorCode?: string;
+}
+
+/**
+ * Legacy generation result (kept for backwards compatibility)
  */
 interface GenerationResult {
   success: boolean;
@@ -38,6 +62,27 @@ interface GenerationResult {
   mimeType?: string;
   error?: string;
   errorCode?: string;
+}
+
+/**
+ * Map backend error codes to user-friendly messages
+ */
+function getUserFriendlyError(errorCode?: string, fallbackMessage?: string): string {
+  const errorMessages: Record<string, string> = {
+    MODEL_RETURNED_TEXT: "Couldn't generate an image. Please try again.",
+    GENERATION_FAILED: "Image generation failed. Try another photo.",
+    API_ERROR: "Service temporarily unavailable.",
+    TIMEOUT: "Request timed out. Please try again.",
+    RATE_LIMIT: "Too many requests. Please wait a moment.",
+    MISSING_API_KEY: "Service is not configured.",
+    INVALID_REQUEST: "Invalid request. Please try again.",
+  };
+
+  if (errorCode && errorMessages[errorCode]) {
+    return errorMessages[errorCode];
+  }
+
+  return fallbackMessage || "An unexpected error occurred. Please try again.";
 }
 
 /**
@@ -59,10 +104,18 @@ interface PhotoContextState {
   isGenerating: boolean;
   /** Current panel/step in the flow */
   currentPanel: number;
-  /** Generated image data URL (null if not generated) */
+  /** Generated image data URL (null if not generated) - LEGACY */
   generatedImage: string | null;
+  /** Generated Player Card image data URL (Phase 8) */
+  generatedCardImage: string | null;
+  /** Generated World Scene image data URL (Phase 8) */
+  generatedWorldScene: string | null;
   /** Generation error message */
   generationError: string | null;
+  /** Player Card generation error (Phase 8) */
+  cardError: string | null;
+  /** World Scene generation error (Phase 8) */
+  sceneError: string | null;
   /** Number of generations used this session */
   generationsUsed: number;
   /** Maximum generations per session */
@@ -77,18 +130,20 @@ interface PhotoContextState {
  * Context actions
  */
 interface PhotoContextActions {
-  /** Set photo from file input */
-  setPhotoFromFile: (file: File, source: PhotoSource) => PhotoValidationResult;
+  /** Set photo from file input (async - resizes image first) */
+  setPhotoFromFile: (file: File, source: PhotoSource) => Promise<PhotoValidationResult>;
   /** Clear current photo */
   clearPhoto: () => void;
   /** Navigate to a panel */
   goToPanel: (panel: number) => void;
   /** Validate a file before setting */
   validateFile: (file: File) => PhotoValidationResult;
-  /** Generate pixel art from current photo */
-  generatePixelArt: () => Promise<GenerationResult>;
-  /** Clear generated image */
+  /** Generate pixel art from current photo (dual-output in Phase 8) */
+  generatePixelArt: () => Promise<DualGenerationResult>;
+  /** Clear generated image (legacy) */
   clearGeneratedImage: () => void;
+  /** Clear all generated images (Phase 8) */
+  clearAllGeneratedImages: () => void;
   /** Reset generation error */
   clearGenerationError: () => void;
   /** Set the selected world */
@@ -161,7 +216,12 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentPanel, setCurrentPanel] = useState(0);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  // Phase 8: Dual-output state
+  const [generatedCardImage, setGeneratedCardImage] = useState<string | null>(null);
+  const [generatedWorldScene, setGeneratedWorldScene] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [sceneError, setSceneError] = useState<string | null>(null);
   const [generationsUsed, setGenerationsUsed] = useState(0);
   const [selectedWorld, setSelectedWorldState] = useState<WorldId>(DEFAULT_WORLD_ID);
 
@@ -184,11 +244,45 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setPhotoFromFile = useCallback(
-    (file: File, photoSource: PhotoSource): PhotoValidationResult => {
-      // Validate first
-      const validation = validatePhotoFile(file);
-      if (!validation.valid) {
-        return validation;
+    async (file: File, photoSource: PhotoSource): Promise<PhotoValidationResult> => {
+      // Validate file type first (before resize)
+      if (
+        !PHOTO_CONSTRAINTS.ALLOWED_TYPES.includes(
+          file.type as (typeof PHOTO_CONSTRAINTS.ALLOWED_TYPES)[number]
+        )
+      ) {
+        return {
+          valid: false,
+          error: `Invalid file type. Allowed: ${PHOTO_CONSTRAINTS.ALLOWED_EXTENSIONS.join(", ")}`,
+        };
+      }
+
+      // Check if file is empty
+      if (file.size === 0) {
+        return {
+          valid: false,
+          error: "File is empty",
+        };
+      }
+
+      // Resize image to prevent oversized uploads
+      const resizeResult = await resizeImage(file);
+
+      if (!resizeResult.success) {
+        return {
+          valid: false,
+          error: resizeResult.error,
+        };
+      }
+
+      const processedFile = resizeResult.file;
+
+      // Validate size after resize (should always pass now)
+      if (processedFile.size > PHOTO_CONSTRAINTS.MAX_SIZE_BYTES) {
+        return {
+          valid: false,
+          error: `File too large. Maximum: ${PHOTO_CONSTRAINTS.MAX_SIZE_DISPLAY}`,
+        };
       }
 
       // Revoke previous URL if exists
@@ -197,15 +291,15 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
       }
 
       // Create object URL for preview (memory only)
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = URL.createObjectURL(processedFile);
 
-      // Set photo data
+      // Set photo data with resized file
       const photoData: PhotoData = {
-        file,
+        file: processedFile,
         previewUrl,
-        name: file.name,
-        size: file.size,
-        type: file.type,
+        name: processedFile.name,
+        size: processedFile.size,
+        type: processedFile.type,
         addedAt: Date.now(),
       };
 
@@ -213,7 +307,11 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
       setSource(photoSource);
       // Clear any previous generation when new photo is selected
       setGeneratedImage(null);
+      setGeneratedCardImage(null);
+      setGeneratedWorldScene(null);
       setGenerationError(null);
+      setCardError(null);
+      setSceneError(null);
 
       return { valid: true };
     },
@@ -227,7 +325,11 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setPhoto(null);
     setSource(null);
     setGeneratedImage(null);
+    setGeneratedCardImage(null);
+    setGeneratedWorldScene(null);
     setGenerationError(null);
+    setCardError(null);
+    setSceneError(null);
   }, [photo]);
 
   const goToPanel = useCallback((panel: number) => {
@@ -238,21 +340,35 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setGeneratedImage(null);
   }, []);
 
+  const clearAllGeneratedImages = useCallback(() => {
+    setGeneratedImage(null);
+    setGeneratedCardImage(null);
+    setGeneratedWorldScene(null);
+    setCardError(null);
+    setSceneError(null);
+  }, []);
+
   const clearGenerationError = useCallback(() => {
     setGenerationError(null);
+    setCardError(null);
+    setSceneError(null);
   }, []);
 
   const setSelectedWorld = useCallback((worldId: WorldId) => {
     setSelectedWorldState(worldId);
-    // Clear generated image when world changes
+    // Clear generated images when world changes
     setGeneratedImage(null);
+    setGeneratedCardImage(null);
+    setGeneratedWorldScene(null);
+    setCardError(null);
+    setSceneError(null);
   }, []);
 
   /**
    * Generate pixel art from the current photo
-   * Calls /api/generate and returns the result
+   * Phase 8: Calls dual-output API for both Player Card and World Scene
    */
-  const generatePixelArt = useCallback(async (): Promise<GenerationResult> => {
+  const generatePixelArt = useCallback(async (): Promise<DualGenerationResult> => {
     // Check if photo exists
     if (!photo) {
       return {
@@ -273,16 +389,14 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
 
     setIsGenerating(true);
     setGenerationError(null);
+    setCardError(null);
+    setSceneError(null);
 
     try {
       // Convert file to base64
       const imageBase64 = await fileToBase64(photo.file);
 
-      // Get world modifier for the selected world
-      const world = getWorld(selectedWorld);
-      const worldModifier = world.promptModifier;
-
-      // Call the generate API with world modifier
+      // Call the generate API with worldId for dual-output (Phase 8)
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -291,31 +405,67 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           imageData: imageBase64,
           mimeType: photo.type,
-          worldModifier,
+          worldId: selectedWorld,
         }),
       });
 
-      const result: GenerationResult = await response.json();
+      // Parse response body
+      let result: DualGenerationResult;
+      try {
+        result = await response.json();
+      } catch {
+        // Non-JSON response - treat as server error
+        const errorMessage = getUserFriendlyError("API_ERROR");
+        setGenerationError(errorMessage);
+        return {
+          success: false,
+          error: errorMessage,
+          errorCode: "API_ERROR",
+        };
+      }
 
-      if (result.success && result.imageBase64 && result.mimeType) {
+      // Check for success (at least one image generated)
+      if (response.ok && result.success) {
         // Increment generation count
         generationsRef.current += 1;
         setGenerationsUsed(generationsRef.current);
 
-        // Create data URL for display (memory only, no persistence)
-        const dataUrl = `data:${result.mimeType};base64,${result.imageBase64}`;
-        setGeneratedImage(dataUrl);
+        // Process Player Card image
+        if (result.cardImage?.success && result.cardImage.imageBase64 && result.cardImage.mimeType) {
+          const cardDataUrl = `data:${result.cardImage.mimeType};base64,${result.cardImage.imageBase64}`;
+          setGeneratedCardImage(cardDataUrl);
+          // Also set legacy field for backwards compatibility
+          setGeneratedImage(cardDataUrl);
+        } else if (result.cardImage?.error) {
+          const cardErrorMsg = getUserFriendlyError(result.cardImage.errorCode, result.cardImage.error);
+          setCardError(cardErrorMsg);
+        }
+
+        // Process World Scene image
+        if (result.worldSceneImage?.success && result.worldSceneImage.imageBase64 && result.worldSceneImage.mimeType) {
+          const sceneDataUrl = `data:${result.worldSceneImage.mimeType};base64,${result.worldSceneImage.imageBase64}`;
+          setGeneratedWorldScene(sceneDataUrl);
+        } else if (result.worldSceneImage?.error) {
+          const sceneErrorMsg = getUserFriendlyError(result.worldSceneImage.errorCode, result.worldSceneImage.error);
+          setSceneError(sceneErrorMsg);
+        }
 
         return result;
-      } else {
-        // Handle error
-        const errorMessage = result.error || "Generation failed";
-        setGenerationError(errorMessage);
-        return result;
       }
+
+      // Handle error responses (both HTTP errors and success: false)
+      const userMessage = getUserFriendlyError(result.errorCode, result.error);
+      setGenerationError(userMessage);
+      return {
+        ...result,
+        error: userMessage,
+      };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An unexpected error occurred";
+      // Network error or other exception
+      const errorMessage = getUserFriendlyError(
+        "UNKNOWN",
+        error instanceof Error ? error.message : undefined
+      );
       setGenerationError(errorMessage);
 
       return {
@@ -336,7 +486,11 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     isGenerating,
     currentPanel,
     generatedImage,
+    generatedCardImage,
+    generatedWorldScene,
     generationError,
+    cardError,
+    sceneError,
     generationsUsed,
     generationLimit: SESSION_GENERATION_LIMIT,
     limitReached,
@@ -348,6 +502,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     validateFile,
     generatePixelArt,
     clearGeneratedImage,
+    clearAllGeneratedImages,
     clearGenerationError,
     setSelectedWorld,
   };

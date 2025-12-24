@@ -2,6 +2,8 @@
  * Card Composition Utility
  *
  * Phase 5: Composes Player Card layers in-memory using canvas
+ * Phase 8: Static frame assets per world
+ *
  * - No disk persistence
  * - No external services
  * - Deterministic output
@@ -9,7 +11,7 @@
  * Composition order:
  * 1. Background
  * 2. Generated character image
- * 3. Frame overlay
+ * 3. Frame overlay (static PNG per world)
  * 4. Text overlays
  */
 
@@ -113,9 +115,9 @@ function drawCharacterImage(
 }
 
 /**
- * Draw the card frame overlay
+ * Draw the card frame overlay (legacy - canvas-drawn)
  */
-function drawFrame(ctx: CanvasRenderingContext2D): void {
+function drawFrameLegacy(ctx: CanvasRenderingContext2D): void {
   const { WIDTH, HEIGHT, IMAGE_WINDOW, BORDER_WIDTH } = CARD_DIMENSIONS;
 
   // Outer frame border
@@ -182,6 +184,19 @@ function drawFrame(ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = CARD_COLORS.FRAME_OUTER;
   ctx.lineWidth = 4;
   ctx.strokeRect(BORDER_WIDTH * 2, BORDER_WIDTH * 2, WIDTH - BORDER_WIDTH * 4, 120);
+}
+
+/**
+ * Draw the card frame from a static PNG asset
+ * Phase 8: Use world-specific frame images
+ */
+async function drawFrameFromAsset(
+  ctx: CanvasRenderingContext2D,
+  framePath: string
+): Promise<void> {
+  const { WIDTH, HEIGHT } = CARD_DIMENSIONS;
+  const frameImg = await loadImage(framePath);
+  ctx.drawImage(frameImg, 0, 0, WIDTH, HEIGHT);
 }
 
 /**
@@ -269,13 +284,17 @@ function drawStatBars(
 /**
  * Compose a complete Player Card
  *
+ * Phase 8: Now supports static frame assets per world
+ *
  * @param characterImageSrc - Data URL or URL of the generated character image
  * @param character - Character data for text overlays (optional, uses defaults)
+ * @param framePath - Path to static frame PNG (optional, falls back to canvas-drawn frame)
  * @returns Data URL of the composed PNG card
  */
 export async function composePlayerCard(
   characterImageSrc: string,
-  character: CharacterData = DEFAULT_CHARACTER
+  character: CharacterData = DEFAULT_CHARACTER,
+  framePath?: string
 ): Promise<string> {
   const { WIDTH, HEIGHT } = CARD_DIMENSIONS;
 
@@ -299,8 +318,12 @@ export async function composePlayerCard(
   // 2. Character image
   drawCharacterImage(ctx, characterImage);
 
-  // 3. Frame overlay
-  drawFrame(ctx);
+  // 3. Frame overlay (static asset or legacy canvas-drawn)
+  if (framePath) {
+    await drawFrameFromAsset(ctx, framePath);
+  } else {
+    drawFrameLegacy(ctx);
+  }
 
   // 4. Text overlays
   drawTextOverlays(ctx, character);

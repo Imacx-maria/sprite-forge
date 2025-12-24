@@ -4,7 +4,10 @@
  * PlayerCard — Displays and enables download of the composed Player Card
  *
  * Phase 5: Card composition and download
+ * Phase 8: Static frame assets per world
+ *
  * - Composes card from generated image
+ * - Uses world-specific static frame overlay
  * - Displays preview of the card
  * - Enables PNG download
  * - No persistence
@@ -24,6 +27,8 @@ interface PlayerCardProps {
   characterImage: string;
   /** Optional character data for overlays */
   character?: CharacterData;
+  /** Path to static frame PNG (Phase 8) */
+  framePath?: string;
   /** Callback when card is ready */
   onCardReady?: (cardDataUrl: string) => void;
 }
@@ -33,13 +38,14 @@ type CardState = "idle" | "composing" | "ready" | "error";
 export function PlayerCard({
   characterImage,
   character = DEFAULT_CHARACTER,
+  framePath,
   onCardReady,
 }: PlayerCardProps) {
   const [cardState, setCardState] = useState<CardState>("idle");
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Compose card when character image changes
+  // Compose card when character image or frame changes
   useEffect(() => {
     // Only compose if we have an image
     if (!characterImage) {
@@ -53,7 +59,8 @@ export function PlayerCard({
       setError(null);
 
       try {
-        const dataUrl = await composePlayerCard(characterImage, character);
+        // Phase 8: Pass framePath to use static frame asset
+        const dataUrl = await composePlayerCard(characterImage, character, framePath);
 
         if (!cancelled) {
           setCardDataUrl(dataUrl);
@@ -75,7 +82,7 @@ export function PlayerCard({
     return () => {
       cancelled = true;
     };
-  }, [characterImage, character, onCardReady]);
+  }, [characterImage, character, framePath, onCardReady]);
 
   const handleDownload = useCallback(() => {
     if (cardDataUrl) {
@@ -143,11 +150,6 @@ export function PlayerCard({
             style={{ imageRendering: "auto" }}
           />
         </div>
-
-        {/* Card info */}
-        <p className="text-sm tracking-wide text-[#666666]">
-          {CARD_DIMENSIONS.WIDTH} x {CARD_DIMENSIONS.HEIGHT} px
-        </p>
 
         {/* Download button */}
         <button

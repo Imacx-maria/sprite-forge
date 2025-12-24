@@ -127,28 +127,36 @@ export class OpenRouterProvider implements AIProvider {
         // Parse response
         const data = await response.json();
 
-        // Extract generated image from response
-        // OpenRouter returns images in the message content
-        const content = data?.choices?.[0]?.message?.content;
+        // Extract message from response
+        const message = data?.choices?.[0]?.message;
 
-        if (!content) {
+        if (!message) {
+          console.error("[OpenRouter] No message in response");
           return {
             success: false,
-            error: "No content in response",
+            error: "No message in response from model",
             errorCode: "GENERATION_FAILED",
           };
         }
 
-        // Check if content is an array (multimodal response)
-        if (Array.isArray(content)) {
-          // Look for image in the response
-          const imageContent = content.find(
-            (item: { type: string }) => item.type === "image_url" || item.type === "image"
-          );
+        // PRIORITY 1: Check message.images[] array first
+        // OpenRouter/Gemini places generated images here, NOT in content
+        const images = message.images as
+          | Array<{
+              type: string;
+              image_url?: { url: string };
+              inline_data?: { data: string; mime_type?: string };
+              data?: string;
+              mime_type?: string;
+            }>
+          | undefined;
 
-          if (imageContent?.image_url?.url) {
-            // Extract base64 from data URL
-            const dataUrl = imageContent.image_url.url;
+        if (images && Array.isArray(images) && images.length > 0) {
+          const imageBlock = images[0];
+
+          // Format: image_url with data URL
+          if (imageBlock.image_url?.url) {
+            const dataUrl = imageBlock.image_url.url;
             const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
 
             if (matches) {
@@ -158,24 +166,104 @@ export class OpenRouterProvider implements AIProvider {
                 mimeType: matches[1],
               };
             }
+
+            console.error(
+              "[OpenRouter] Image URL is not a data URL:",
+              dataUrl.substring(0, 50)
+            );
           }
 
-          // If no image found, check for text description (model might not support image output)
+          // Format: inline_data with base64
+          if (imageBlock.inline_data?.data) {
+            return {
+              success: true,
+              imageBase64: imageBlock.inline_data.data,
+              mimeType: imageBlock.inline_data.mime_type || "image/png",
+            };
+          }
+
+          // Format: direct data field
+          if (imageBlock.data && typeof imageBlock.data === "string") {
+            return {
+              success: true,
+              imageBase64: imageBlock.data,
+              mimeType: imageBlock.mime_type || "image/png",
+            };
+          }
+
+          // Images array exists but couldn't extract data
+          console.error(
+            "[OpenRouter] Images array exists but failed to extract:",
+            JSON.stringify(imageBlock).substring(0, 200)
+          );
+        }
+
+        // PRIORITY 2: Check content for image data (fallback for other formats)
+        const content = message.content;
+
+        // Check if content is an array (multimodal response in content)
+        if (Array.isArray(content)) {
+          const imageContent = content.find(
+            (item: { type: string }) =>
+              item.type === "output_image" ||
+              item.type === "image" ||
+              item.type === "image_url"
+          );
+
+          if (imageContent) {
+            // Gemini format: inline_data
+            if (imageContent.inline_data?.data) {
+              return {
+                success: true,
+                imageBase64: imageContent.inline_data.data,
+                mimeType: imageContent.inline_data.mime_type || "image/png",
+              };
+            }
+
+            // Direct data field
+            if (imageContent.data && typeof imageContent.data === "string") {
+              return {
+                success: true,
+                imageBase64: imageContent.data,
+                mimeType: imageContent.mime_type || "image/png",
+              };
+            }
+
+            // image_url format
+            if (imageContent.image_url?.url) {
+              const dataUrl = imageContent.image_url.url;
+              const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+
+              if (matches) {
+                return {
+                  success: true,
+                  imageBase64: matches[2],
+                  mimeType: matches[1],
+                };
+              }
+            }
+          }
+
+          // Content array has text only (no images found)
           const textContent = content.find(
             (item: { type: string }) => item.type === "text"
           );
           if (textContent?.text) {
+            console.error(
+              "[OpenRouter] Model returned text instead of image:",
+              textContent.text.substring(0, 200)
+            );
             return {
               success: false,
-              error: "Model returned text instead of image. Image generation may not be supported.",
-              errorCode: "GENERATION_FAILED",
+              error: "Model returned text instead of image",
+              errorCode: "MODEL_RETURNED_TEXT",
             };
           }
         }
 
-        // If content is a string, the model returned text instead of an image
-        if (typeof content === "string") {
-          // Check if it's a base64 image directly
+        // If content is a non-empty string, the model returned text only
+        if (typeof content === "string" && content.length > 0) {
+          // Check if it's a base64 image directly (unlikely but handle it)
           if (content.startsWith("data:image")) {
             const matches = content.match(/^data:([^;]+);base64,(.+)$/);
             if (matches) {
@@ -187,16 +275,27 @@ export class OpenRouterProvider implements AIProvider {
             }
           }
 
+          // It's text, not an image
+          console.error(
+            "[OpenRouter] Model returned text instead of image:",
+            content.substring(0, 200)
+          );
           return {
             success: false,
             error: "Model returned text instead of image",
-            errorCode: "GENERATION_FAILED",
+            errorCode: "MODEL_RETURNED_TEXT",
           };
         }
 
+        // No images and no meaningful content - true generation failure
+        console.error(
+          "[OpenRouter] No images or content in response. Message keys:",
+          Object.keys(message)
+        );
+
         return {
           success: false,
-          error: "Unexpected response format",
+          error: "No image generated. The model returned an empty response.",
           errorCode: "GENERATION_FAILED",
         };
       } catch (fetchError) {

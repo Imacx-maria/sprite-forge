@@ -3,6 +3,7 @@
  *
  * Phase 4: Main entry point for AI generation
  * Phase 6: World-based prompt modifiers
+ * Phase 8: Dual-output generation (Player Card + World Scene)
  *
  * All app code must use this file for AI operations.
  * DO NOT import from provider files directly.
@@ -12,20 +13,25 @@
  * - Centralized configuration
  * - Consistent error handling
  * - World-based prompt variation
+ * - Parallel dual-output generation
  */
 
 import { createOpenRouterProvider } from "./openrouter";
+import { buildPlayerCardPrompt, buildWorldScenePrompt } from "./prompts";
 import type {
   AIProvider,
   GenerateImageRequest,
   GenerateImageResponse,
+  DualGenerationResponse,
 } from "./types";
+import type { WorldDefinition } from "@/lib/worlds/types";
 
 // Re-export types for app code
 export type {
   GenerateImageRequest,
   GenerateImageResponse,
   GenerationErrorCode,
+  DualGenerationResponse,
 } from "./types";
 
 /**
@@ -150,4 +156,91 @@ export async function generatePixelArt(
   };
 
   return provider.generateImage(request);
+}
+
+/**
+ * Generate BOTH Player Card and World Scene images in parallel
+ *
+ * Phase 8: Dual-output generation
+ *
+ * @param imageBase64 - Base64-encoded source image
+ * @param mimeType - MIME type of the source image
+ * @param world - World definition with all prompt modifiers
+ * @returns Both generation results (partial success allowed)
+ */
+export async function generateDualOutput(
+  imageBase64: string,
+  mimeType: string,
+  world: WorldDefinition
+): Promise<DualGenerationResponse> {
+  // Check configuration
+  if (!isConfigured()) {
+    return {
+      success: false,
+      error: "AI generation is not configured. OPENROUTER_API_KEY is missing.",
+      errorCode: "MISSING_API_KEY",
+    };
+  }
+
+  // Validate input
+  if (!imageBase64) {
+    return {
+      success: false,
+      error: "No image data provided",
+      errorCode: "INVALID_REQUEST",
+    };
+  }
+
+  if (!mimeType || !mimeType.startsWith("image/")) {
+    return {
+      success: false,
+      error: "Invalid image type",
+      errorCode: "INVALID_REQUEST",
+    };
+  }
+
+  // Build prompts for both outputs
+  const cardPrompt = buildPlayerCardPrompt(world.promptModifier);
+  const scenePrompt = buildWorldScenePrompt(
+    world.scenePromptModifier,
+    world.sceneCamera
+  );
+
+  // Get provider
+  const provider = getProvider();
+
+  // Run BOTH generations in parallel
+  const [cardResult, sceneResult] = await Promise.all([
+    provider.generateImage({
+      imageBase64,
+      mimeType,
+      prompt: cardPrompt,
+    }),
+    provider.generateImage({
+      imageBase64,
+      mimeType,
+      prompt: scenePrompt,
+    }),
+  ]);
+
+  // Determine overall success (at least one succeeded)
+  const success = cardResult.success || sceneResult.success;
+
+  // If both failed, return combined error
+  if (!success) {
+    return {
+      success: false,
+      cardImage: cardResult,
+      worldSceneImage: sceneResult,
+      error: "Both generations failed",
+      errorCode: cardResult.errorCode || sceneResult.errorCode || "GENERATION_FAILED",
+    };
+  }
+
+  // Return both results (partial success allowed)
+  return {
+    success: true,
+    cardImage: cardResult,
+    worldSceneImage: sceneResult,
+  };
 }

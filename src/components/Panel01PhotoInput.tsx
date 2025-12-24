@@ -1,27 +1,30 @@
 "use client";
 
 /**
- * Panel 01 — Photo Input, World Selection, Generation & Player Card Screen
+ * Panel 01 — Photo Input, World Selection, Generation & Dual Output Screen
  *
  * Phase 5: Complete flow from photo to downloadable Player Card
  * Phase 6: World selection for themed generation
+ * Phase 8: Dual-output generation (Player Card + World Scene)
  *
  * - Upload photo via file picker or drag-and-drop
  * - Optional webcam capture
  * - Preview selected photo
  * - Select world theme for generation
- * - Generate pixel-art via OpenRouter API with world modifier
- * - Display generated result as Player Card
- * - Download composed Player Card as PNG
+ * - Generate BOTH pixel-art outputs via OpenRouter API
+ * - Display generated results: World Scene + Player Card
+ * - Download both outputs as PNG
  * - Per-session generation limit
  */
 
 import { useState, useCallback } from "react";
 import { usePhoto } from "@/context";
+import { getWorld } from "@/lib/worlds";
 import { PhotoUpload } from "./PhotoUpload";
 import { PhotoPreview } from "./PhotoPreview";
 import { WebcamCapture } from "./WebcamCapture";
 import { PlayerCard } from "./PlayerCard";
+import { WorldScene } from "./WorldScene";
 import { WorldSelector } from "./WorldSelector";
 
 interface Panel01Props {
@@ -32,20 +35,36 @@ interface Panel01Props {
 export function Panel01PhotoInput({ onBack }: Panel01Props) {
   const {
     photo,
+    source,
     goToPanel,
     generatePixelArt,
     isGenerating,
     generatedImage,
+    generatedCardImage,
+    generatedWorldScene,
     generationError,
+    cardError,
+    sceneError,
     generationsUsed,
     generationLimit,
     limitReached,
     clearGeneratedImage,
+    clearAllGeneratedImages,
     clearGenerationError,
+    clearPhoto,
     selectedWorld,
     setSelectedWorld,
   } = usePhoto();
   const [showWebcam, setShowWebcam] = useState(false);
+
+  // Get world info for display
+  const world = getWorld(selectedWorld);
+
+  // Check if any images were generated
+  const hasAnyGeneratedImage = generatedCardImage || generatedWorldScene;
+
+  // Check if photo came from webcam
+  const isFromWebcam = source === "webcam";
 
   const handleBack = useCallback(() => {
     goToPanel(0);
@@ -58,9 +77,9 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
   }, [generatePixelArt, clearGenerationError]);
 
   const handleTryAgain = useCallback(() => {
-    clearGeneratedImage();
+    clearAllGeneratedImages();
     clearGenerationError();
-  }, [clearGeneratedImage, clearGenerationError]);
+  }, [clearAllGeneratedImages, clearGenerationError]);
 
   const handleWebcamCapture = useCallback(() => {
     setShowWebcam(false);
@@ -70,23 +89,70 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     setShowWebcam(false);
   }, []);
 
-  // Show generated result with Player Card
-  if (generatedImage) {
+  // Take another photo (clear current and open webcam)
+  const handleTakeAnotherPhoto = useCallback(() => {
+    clearPhoto();
+    setShowWebcam(true);
+  }, [clearPhoto]);
+
+  // Upload a different file (clear current, close webcam if open)
+  const handleUploadInstead = useCallback(() => {
+    clearPhoto();
+    setShowWebcam(false);
+  }, [clearPhoto]);
+
+  // Show generated results (Phase 8: World Scene + Player Card)
+  if (hasAnyGeneratedImage) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
-        <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-8 px-8 py-12">
+      <div className="flex min-h-screen flex-col items-center bg-[#0a0a0a]">
+        <main className="flex w-full max-w-6xl flex-col items-center gap-8 px-8 py-12">
           {/* Header */}
           <div className="flex flex-col items-center gap-2 text-center">
             <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
               YOUR PIXEL LEGEND
             </h1>
             <p className="text-lg tracking-wide text-[#888888]">
-              FORGED FROM YOUR PHOTO
+              FORGED IN {world.displayName.toUpperCase()}
             </p>
           </div>
 
-          {/* Player Card with download */}
-          <PlayerCard characterImage={generatedImage} />
+          {/* World Scene (if generated) */}
+          {generatedWorldScene ? (
+            <div className="w-full">
+              <h2 className="mb-4 text-center text-xl tracking-wide text-[#666666]">
+                WORLD SCENE
+              </h2>
+              <WorldScene
+                sceneImage={generatedWorldScene}
+                worldName={world.displayName}
+              />
+            </div>
+          ) : sceneError ? (
+            <div className="flex flex-col items-center gap-2 rounded border-2 border-yellow-500/50 bg-yellow-500/10 px-6 py-4">
+              <p className="text-sm tracking-wide text-yellow-500">
+                World Scene: {sceneError}
+              </p>
+            </div>
+          ) : null}
+
+          {/* Player Card (if generated) */}
+          {generatedCardImage ? (
+            <div className="mt-4">
+              <h2 className="mb-4 text-center text-xl tracking-wide text-[#666666]">
+                PLAYER CARD
+              </h2>
+              <PlayerCard
+                characterImage={generatedCardImage}
+                framePath={world.framePath}
+              />
+            </div>
+          ) : cardError ? (
+            <div className="flex flex-col items-center gap-2 rounded border-2 border-yellow-500/50 bg-yellow-500/10 px-6 py-4">
+              <p className="text-sm tracking-wide text-yellow-500">
+                Player Card: {cardError}
+              </p>
+            </div>
+          ) : null}
 
           {/* Generation count */}
           <p className="text-sm tracking-wide text-[#666666]">
@@ -201,7 +267,47 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
           ) : photo ? (
             /* Show preview and world selection if photo selected */
             <div className="flex flex-col items-center gap-8">
-              <PhotoPreview maxSize={320} showInfo showClear />
+              {/* Photo preview without built-in clear button */}
+              <PhotoPreview maxSize={320} showInfo showClear={false} />
+
+              {/* Action buttons based on photo source */}
+              <div className="flex flex-col items-center gap-3">
+                {isFromWebcam ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTakeAnotherPhoto}
+                      className="text-lg tracking-wide text-[#888888] transition-colors hover:text-white"
+                    >
+                      [ TAKE ANOTHER PHOTO ]
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUploadInstead}
+                      className="text-sm tracking-wide text-[#666666] transition-colors hover:text-white"
+                    >
+                      Upload a file instead
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={clearPhoto}
+                      className="text-lg tracking-wide text-[#888888] transition-colors hover:text-red-500"
+                    >
+                      [ REMOVE ]
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowWebcam(true)}
+                      className="text-sm tracking-wide text-[#666666] transition-colors hover:text-white"
+                    >
+                      Use webcam instead
+                    </button>
+                  </>
+                )}
+              </div>
 
               {/* World Selection */}
               <WorldSelector
@@ -209,17 +315,6 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
                 onWorldChange={setSelectedWorld}
                 disabled={isGenerating}
               />
-
-              {/* Mode switch when photo exists */}
-              <div className="flex items-center gap-6 text-sm text-[#666666]">
-                <button
-                  type="button"
-                  onClick={() => setShowWebcam(true)}
-                  className="tracking-wide transition-colors hover:text-white"
-                >
-                  USE WEBCAM INSTEAD
-                </button>
-              </div>
             </div>
           ) : (
             /* Show upload interface */

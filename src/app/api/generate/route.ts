@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   generatePixelArt,
+  generateDualOutput,
   isConfigured,
   type GenerateImageResponse,
+  type DualGenerationResponse,
 } from "@/lib/ai";
+import { getWorld, type WorldId } from "@/lib/worlds";
 
 /**
  * POST /api/generate
@@ -11,19 +14,21 @@ import {
  *
  * Phase 4: AI generation via OpenRouter
  * Phase 6: World-based prompt modifiers
+ * Phase 8: Dual-output generation (Player Card + World Scene)
  *
  * Request body:
  * {
  *   imageData: string (base64, without data URL prefix),
  *   mimeType: string (e.g., "image/jpeg"),
- *   worldModifier?: string (optional world theme prompt modifier)
+ *   worldId?: string (world ID for dual generation),
+ *   worldModifier?: string (LEGACY: optional world theme prompt modifier)
  * }
  *
- * Response:
+ * Response (Phase 8 dual-output):
  * {
  *   success: boolean,
- *   imageBase64?: string,
- *   mimeType?: string,
+ *   cardImage?: { imageBase64: string, mimeType: string },
+ *   worldSceneImage?: { imageBase64: string, mimeType: string },
  *   error?: string,
  *   errorCode?: string
  * }
@@ -34,7 +39,8 @@ import {
 interface GenerateRequestBody {
   imageData: string;
   mimeType: string;
-  worldModifier?: string;
+  worldId?: WorldId;
+  worldModifier?: string; // LEGACY: kept for backwards compatibility
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -103,8 +109,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Generate pixel art
-    // NOTE: This does NOT persist the image anywhere
+    // Phase 8: Use dual generation when worldId is provided
+    // Otherwise fallback to legacy single-output mode
+    if (body.worldId) {
+      const world = getWorld(body.worldId);
+      const result = await generateDualOutput(
+        body.imageData,
+        body.mimeType,
+        world
+      );
+
+      // Return dual-output result
+      if (result.success) {
+        return NextResponse.json(result, { status: 200 });
+      } else {
+        const statusMap: Record<string, number> = {
+          MISSING_API_KEY: 503,
+          INVALID_REQUEST: 400,
+          RATE_LIMIT: 429,
+          TIMEOUT: 504,
+          API_ERROR: 502,
+          GENERATION_FAILED: 500,
+          MODEL_RETURNED_TEXT: 422,
+          UNKNOWN: 500,
+        };
+
+        const status = statusMap[result.errorCode || "UNKNOWN"] || 500;
+        return NextResponse.json(result, { status });
+      }
+    }
+
+    // LEGACY: Single-output mode for backwards compatibility
     const result = await generatePixelArt(
       body.imageData,
       body.mimeType,
@@ -123,6 +158,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         TIMEOUT: 504,
         API_ERROR: 502,
         GENERATION_FAILED: 500,
+        MODEL_RETURNED_TEXT: 422,
         UNKNOWN: 500,
       };
 
