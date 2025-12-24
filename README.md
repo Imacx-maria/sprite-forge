@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SPRITE FORGE
+
+**Turn selfies into pixel-perfect game memories.**
+
+SPRITE FORGE transforms real photos into retro game characters and places them inside playable-feeling game worlds.
+
+## What It Does
+
+1. Upload a photo (or capture with webcam)
+2. Choose a game world
+3. Name your character
+4. Receive two pixel-art outputs:
+   - **World Scene** — a 16:9 landscape that looks like a paused game screenshot
+   - **Player Card** — a vertical collectible character card
+
+## Tech Stack
+
+- **Frontend**: Next.js 14 (App Router) + Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Image Generation**: Replicate API
+- **Hosting**: Vercel
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm
+- Replicate API token
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/Imacx-maria/sprite-forge.git
+cd sprite-forge
+
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env.local
+
+# Add your Replicate API token to .env.local
+# REPLICATE_API_TOKEN=your_token_here
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+sprite-forge/
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── upload/      # Photo upload endpoint
+│   │   │   └── generate/    # Image generation endpoint
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   └── globals.css
+│   ├── components/          # UI components (TBD)
+│   ├── lib/                 # Utilities (TBD)
+│   └── types/               # TypeScript types (TBD)
+├── docs/                    # Documentation
+├── public/                  # Static assets
+└── .env.example             # Environment template
+```
 
-## Learn More
+## Documentation
 
-To learn more about Next.js, take a look at the following resources:
+See the `docs/` folder for complete product specifications, including:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Product principles
+- Panel flow definitions
+- World specifications
+- Visual systems
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Status
 
-## Deploy on Vercel
+🚧 **Phase 0: Setup Complete**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [x] GitHub repository
+- [x] Next.js initialized
+- [x] Tailwind configured
+- [x] API route stubs
+- [ ] UI implementation
+- [ ] Replicate integration
+- [ ] Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+Private — not for redistribution.
