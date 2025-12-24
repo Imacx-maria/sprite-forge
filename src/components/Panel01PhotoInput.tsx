@@ -1,16 +1,15 @@
 "use client";
 
 /**
- * Panel 01 — Photo Input Screen
+ * Panel 01 — Photo Input & Generation Screen
  *
- * Phase 3: Client-side photo input
+ * Phase 4: Client-side photo input with AI generation
  * - Upload photo via file picker or drag-and-drop
  * - Optional webcam capture
  * - Preview selected photo
- * - Proceed to next step (stubbed for Phase 4)
- *
- * TODO Phase 4: Add world/style selection before generation
- * TODO Phase 4: Wire up "FORGE IT" button to /api/generate
+ * - Generate pixel-art via OpenRouter API
+ * - Display generated result
+ * - Per-session generation limit
  */
 
 import { useState, useCallback } from "react";
@@ -19,16 +18,25 @@ import { PhotoUpload } from "./PhotoUpload";
 import { PhotoPreview } from "./PhotoPreview";
 import { WebcamCapture } from "./WebcamCapture";
 
-type InputMode = "upload" | "webcam";
-
 interface Panel01Props {
   /** Callback to go back to title screen */
   onBack?: () => void;
 }
 
 export function Panel01PhotoInput({ onBack }: Panel01Props) {
-  const { photo, goToPanel, prepareGenerationRequest } = usePhoto();
-  const [inputMode, setInputMode] = useState<InputMode>("upload");
+  const {
+    photo,
+    goToPanel,
+    generatePixelArt,
+    isGenerating,
+    generatedImage,
+    generationError,
+    generationsUsed,
+    generationLimit,
+    limitReached,
+    clearGeneratedImage,
+    clearGenerationError,
+  } = usePhoto();
   const [showWebcam, setShowWebcam] = useState(false);
 
   const handleBack = useCallback(() => {
@@ -36,35 +44,124 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     onBack?.();
   }, [goToPanel, onBack]);
 
-  const handleProceed = useCallback(async () => {
-    /**
-     * TODO Phase 4: Implement generation flow
-     *
-     * 1. Call prepareGenerationRequest() to get base64 data
-     * 2. Show loading/processing state
-     * 3. POST to /api/generate with the request
-     * 4. Navigate to results panel on success
-     * 5. Show error on failure
-     *
-     * For now, just log and stub the action.
-     */
-    console.log("[STUB] FORGE IT clicked - Phase 4 will implement generation");
+  const handleGenerate = useCallback(async () => {
+    clearGenerationError();
+    await generatePixelArt();
+  }, [generatePixelArt, clearGenerationError]);
 
-    // Demo: prepare the request structure (does not call API)
-    const request = await prepareGenerationRequest();
-    console.log("[STUB] Generation request prepared:", request);
-
-    // TODO Phase 4: goToPanel(2) or navigate to results
-  }, [prepareGenerationRequest]);
+  const handleTryAgain = useCallback(() => {
+    clearGeneratedImage();
+    clearGenerationError();
+  }, [clearGeneratedImage, clearGenerationError]);
 
   const handleWebcamCapture = useCallback(() => {
     setShowWebcam(false);
-    setInputMode("upload");
   }, []);
 
   const handleWebcamCancel = useCallback(() => {
     setShowWebcam(false);
   }, []);
+
+  // Show generated result
+  if (generatedImage) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
+        <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-12 px-8 py-16">
+          {/* Header */}
+          <div className="flex flex-col items-center gap-4 text-center">
+            <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
+              YOUR PIXEL LEGEND
+            </h1>
+            <p className="text-lg tracking-wide text-[#888888]">
+              FORGED FROM YOUR PHOTO
+            </p>
+          </div>
+
+          {/* Generated image display */}
+          <div className="flex flex-col items-center gap-6">
+            <div className="border-4 border-[#666666] bg-[#111111] p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImage}
+                alt="Generated pixel art character"
+                className="max-h-80 max-w-80 object-contain"
+                style={{ imageRendering: "pixelated" }}
+              />
+            </div>
+
+            {/* Generation count */}
+            <p className="text-sm tracking-wide text-[#666666]">
+              GENERATIONS: {generationsUsed} / {generationLimit}
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col items-center gap-6">
+            {!limitReached && (
+              <button
+                type="button"
+                onClick={handleTryAgain}
+                className="text-2xl tracking-widest text-white transition-opacity hover:opacity-70"
+              >
+                TRY AGAIN
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleBack}
+              className="text-lg tracking-wide text-[#888888] transition-colors hover:text-white"
+            >
+              START OVER
+            </button>
+          </div>
+
+          {/* Version footer */}
+          <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
+            v0.3.0 — PHASE 4
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isGenerating) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
+        <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-12 px-8 py-16">
+          {/* Header */}
+          <div className="flex flex-col items-center gap-4 text-center">
+            <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
+              FORGING...
+            </h1>
+            <p className="text-lg tracking-wide text-[#888888]">
+              TRANSFORMING YOUR PHOTO INTO PIXEL ART
+            </p>
+          </div>
+
+          {/* Loading animation */}
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="animate-pulse text-4xl text-white">[ </span>
+              <span className="animate-pulse text-4xl text-[#888888]">
+                ████████
+              </span>
+              <span className="animate-pulse text-4xl text-white"> ]</span>
+            </div>
+            <p className="text-sm tracking-wide text-[#666666]">
+              THIS MAY TAKE A MOMENT...
+            </p>
+          </div>
+
+          {/* Version footer */}
+          <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
+            v0.3.0 — PHASE 4
+          </p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
@@ -78,6 +175,22 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
             UPLOAD A SELFIE OR USE YOUR WEBCAM
           </p>
         </div>
+
+        {/* Generation error */}
+        {generationError && (
+          <div className="flex flex-col items-center gap-4 rounded border-2 border-red-500/50 bg-red-500/10 px-6 py-4">
+            <p className="text-lg tracking-wide text-red-500" role="alert">
+              ERROR: {generationError}
+            </p>
+            <button
+              type="button"
+              onClick={clearGenerationError}
+              className="text-sm tracking-wide text-[#888888] transition-colors hover:text-white"
+            >
+              [ DISMISS ]
+            </button>
+          </div>
+        )}
 
         {/* Main content area */}
         <div className="flex w-full flex-col items-center gap-8">
@@ -130,22 +243,34 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
         {/* Action buttons */}
         <div className="flex flex-col items-center gap-6">
-          {/* Proceed button (only if photo selected) */}
-          {photo && !showWebcam && (
+          {/* Generate button (only if photo selected and not at limit) */}
+          {photo && !showWebcam && !limitReached && (
             <button
               type="button"
-              onClick={handleProceed}
-              className="text-3xl tracking-widest text-white transition-opacity hover:opacity-70"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="text-3xl tracking-widest text-white transition-opacity hover:opacity-70 disabled:opacity-50"
             >
               FORGE IT
             </button>
           )}
 
-          {/* TODO Phase 4 hint */}
+          {/* Limit reached message */}
+          {photo && !showWebcam && limitReached && (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xl tracking-wide text-[#888888]">
+                GENERATION LIMIT REACHED
+              </p>
+              <p className="text-sm tracking-wide text-[#666666]">
+                REFRESH THE PAGE TO RESET ({generationLimit} PER SESSION)
+              </p>
+            </div>
+          )}
+
+          {/* Generation counter */}
           {photo && !showWebcam && (
             <p className="text-sm tracking-wide text-[#444444]">
-              {/* TODO Phase 4: World selection will appear here */}
-              GENERATION COMING IN PHASE 4
+              GENERATIONS: {generationsUsed} / {generationLimit}
             </p>
           )}
         </div>
@@ -161,7 +286,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
         {/* Version footer */}
         <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-          v0.2.0 — PHASE 3
+          v0.3.0 — PHASE 4
         </p>
       </main>
     </div>

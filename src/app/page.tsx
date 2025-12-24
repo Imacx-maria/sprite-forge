@@ -3,14 +3,13 @@
 /**
  * SPRITE FORGE — Main Application
  *
- * Phase 3: Client-side photo input
+ * Phase 4: AI-powered pixel art generation
  * - Panel 00: Title / Attract Screen
- * - Panel 01: Photo Input (upload or webcam)
+ * - Panel 01: Photo Input, Generation, and Results
  *
  * Navigation handled via PhotoContext state.
- * All photo data is held in memory only (no persistence).
- *
- * TODO Phase 4: Add generation flow and results panel
+ * All data is held in memory only (no persistence).
+ * Images are NOT saved anywhere - they exist only in the response.
  */
 
 import { useCallback } from "react";
@@ -58,7 +57,7 @@ function Panel00TitleScreen() {
 
         {/* Footer hint */}
         <p className="absolute bottom-8 text-sm tracking-wide text-[#444444]">
-          v0.2.0 — PHASE 3
+          v0.3.0 — PHASE 4
         </p>
       </main>
     </div>
@@ -76,10 +75,6 @@ function PanelRouter() {
       return <Panel00TitleScreen />;
     case 1:
       return <Panel01PhotoInput />;
-    // TODO Phase 4: Add more panels
-    // case 2: return <Panel02WorldSelect />;
-    // case 3: return <Panel03Generation />;
-    // case 4: return <Panel04Results />;
     default:
       return <Panel00TitleScreen />;
   }
