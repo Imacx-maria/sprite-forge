@@ -9,12 +9,14 @@ import {
  * POST /api/generate
  * Generate pixel-art character from uploaded photo
  *
- * Phase 4: AI generation via OpenRouter (Nano Banana model)
+ * Phase 4: AI generation via OpenRouter
+ * Phase 6: World-based prompt modifiers
  *
  * Request body:
  * {
  *   imageData: string (base64, without data URL prefix),
- *   mimeType: string (e.g., "image/jpeg")
+ *   mimeType: string (e.g., "image/jpeg"),
+ *   worldModifier?: string (optional world theme prompt modifier)
  * }
  *
  * Response:
@@ -32,6 +34,7 @@ import {
 interface GenerateRequestBody {
   imageData: string;
   mimeType: string;
+  worldModifier?: string;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -102,7 +105,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Generate pixel art
     // NOTE: This does NOT persist the image anywhere
-    const result = await generatePixelArt(body.imageData, body.mimeType);
+    const result = await generatePixelArt(
+      body.imageData,
+      body.mimeType,
+      body.worldModifier
+    );
 
     // Return result
     if (result.success) {

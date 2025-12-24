@@ -4,6 +4,8 @@
  * PhotoContext — Client-side Photo & Generation State Management
  *
  * Phase 4: Manages photo data and generation in memory only.
+ * Phase 6: World selection for prompt variation
+ *
  * - No persistence (localStorage, cookies, etc.)
  * - No server-side storage
  * - Data lost on page refresh (by design)
@@ -25,6 +27,7 @@ import type {
   PhotoValidationResult,
 } from "@/types/photo";
 import { PHOTO_CONSTRAINTS } from "@/types/photo";
+import { DEFAULT_WORLD_ID, getWorld, type WorldId } from "@/lib/worlds";
 
 /**
  * Generation result from the API
@@ -66,6 +69,8 @@ interface PhotoContextState {
   generationLimit: number;
   /** Whether limit has been reached */
   limitReached: boolean;
+  /** Currently selected world for generation */
+  selectedWorld: WorldId;
 }
 
 /**
@@ -86,6 +91,8 @@ interface PhotoContextActions {
   clearGeneratedImage: () => void;
   /** Reset generation error */
   clearGenerationError: () => void;
+  /** Set the selected world */
+  setSelectedWorld: (worldId: WorldId) => void;
 }
 
 type PhotoContextValue = PhotoContextState & PhotoContextActions;
@@ -156,6 +163,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationsUsed, setGenerationsUsed] = useState(0);
+  const [selectedWorld, setSelectedWorldState] = useState<WorldId>(DEFAULT_WORLD_ID);
 
   // Use ref to track generations to avoid stale closure issues
   const generationsRef = useRef(0);
@@ -234,6 +242,12 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setGenerationError(null);
   }, []);
 
+  const setSelectedWorld = useCallback((worldId: WorldId) => {
+    setSelectedWorldState(worldId);
+    // Clear generated image when world changes
+    setGeneratedImage(null);
+  }, []);
+
   /**
    * Generate pixel art from the current photo
    * Calls /api/generate and returns the result
@@ -264,7 +278,11 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
       // Convert file to base64
       const imageBase64 = await fileToBase64(photo.file);
 
-      // Call the generate API
+      // Get world modifier for the selected world
+      const world = getWorld(selectedWorld);
+      const worldModifier = world.promptModifier;
+
+      // Call the generate API with world modifier
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -273,6 +291,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           imageData: imageBase64,
           mimeType: photo.type,
+          worldModifier,
         }),
       });
 
@@ -307,7 +326,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsGenerating(false);
     }
-  }, [photo]);
+  }, [photo, selectedWorld]);
 
   const value: PhotoContextValue = {
     // State
@@ -321,6 +340,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     generationsUsed,
     generationLimit: SESSION_GENERATION_LIMIT,
     limitReached,
+    selectedWorld,
     // Actions
     setPhotoFromFile,
     clearPhoto,
@@ -329,6 +349,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     generatePixelArt,
     clearGeneratedImage,
     clearGenerationError,
+    setSelectedWorld,
   };
 
   return (

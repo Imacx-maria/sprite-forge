@@ -2,6 +2,8 @@
  * AI Abstraction Layer
  *
  * Phase 4: Main entry point for AI generation
+ * Phase 6: World-based prompt modifiers
+ *
  * All app code must use this file for AI operations.
  * DO NOT import from provider files directly.
  *
@@ -9,6 +11,7 @@
  * - Easy provider switching
  * - Centralized configuration
  * - Consistent error handling
+ * - World-based prompt variation
  */
 
 import { createOpenRouterProvider } from "./openrouter";
@@ -26,9 +29,10 @@ export type {
 } from "./types";
 
 /**
- * Default prompt template for pixel-art character generation
+ * Base prompt template for pixel-art character generation
+ * World modifiers are appended to this base prompt
  */
-const DEFAULT_PROMPT = `Transform this photo into a pixel-art game character sprite.
+const BASE_PROMPT = `Transform this photo into a pixel-art game character sprite.
 
 Style requirements:
 - 16-bit retro game aesthetic
@@ -36,13 +40,39 @@ Style requirements:
 - Character should be centered
 - Simple color palette (max 16 colors)
 - Game-ready sprite appearance
-- Transparent or solid color background
+- Transparent or solid color background`;
 
-Generate ONLY the pixel art image, no text or explanations.`;
+/**
+ * Final instruction appended after world modifier
+ */
+const PROMPT_SUFFIX = `Generate ONLY the pixel art image, no text or explanations.`;
+
+/**
+ * Build the complete prompt with optional world modifier
+ *
+ * Structure:
+ * 1. Base prompt (character transformation rules)
+ * 2. World modifier (setting, style, mood)
+ * 3. Suffix (output instruction)
+ */
+export function buildPrompt(worldModifier?: string): string {
+  if (worldModifier) {
+    return `${BASE_PROMPT}
+
+World Theme:
+${worldModifier}
+
+${PROMPT_SUFFIX}`;
+  }
+
+  return `${BASE_PROMPT}
+
+${PROMPT_SUFFIX}`;
+}
 
 /**
  * Get the configured AI provider
- * Currently uses OpenRouter with Nano Banana model
+ * Currently uses OpenRouter with Gemini 2.0 Flash model
  */
 function getProvider(): AIProvider {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -74,13 +104,13 @@ export function getModelName(): string {
  *
  * @param imageBase64 - Base64-encoded source image
  * @param mimeType - MIME type of the source image
- * @param customPrompt - Optional custom prompt (uses default if not provided)
+ * @param worldModifier - Optional world theme modifier to append to prompt
  * @returns Generation result with image or error
  */
 export async function generatePixelArt(
   imageBase64: string,
   mimeType: string,
-  customPrompt?: string
+  worldModifier?: string
 ): Promise<GenerateImageResponse> {
   // Check configuration
   if (!isConfigured()) {
@@ -108,12 +138,15 @@ export async function generatePixelArt(
     };
   }
 
+  // Build prompt with world modifier
+  const prompt = buildPrompt(worldModifier);
+
   // Get provider and generate
   const provider = getProvider();
   const request: GenerateImageRequest = {
     imageBase64,
     mimeType,
-    prompt: customPrompt || DEFAULT_PROMPT,
+    prompt,
   };
 
   return provider.generateImage(request);

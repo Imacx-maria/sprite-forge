@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * Panel 01 — Photo Input, Generation & Player Card Screen
+ * Panel 01 — Photo Input, World Selection, Generation & Player Card Screen
  *
  * Phase 5: Complete flow from photo to downloadable Player Card
+ * Phase 6: World selection for themed generation
+ *
  * - Upload photo via file picker or drag-and-drop
  * - Optional webcam capture
  * - Preview selected photo
- * - Generate pixel-art via OpenRouter API
+ * - Select world theme for generation
+ * - Generate pixel-art via OpenRouter API with world modifier
  * - Display generated result as Player Card
  * - Download composed Player Card as PNG
  * - Per-session generation limit
@@ -19,6 +22,7 @@ import { PhotoUpload } from "./PhotoUpload";
 import { PhotoPreview } from "./PhotoPreview";
 import { WebcamCapture } from "./WebcamCapture";
 import { PlayerCard } from "./PlayerCard";
+import { WorldSelector } from "./WorldSelector";
 
 interface Panel01Props {
   /** Callback to go back to title screen */
@@ -38,6 +42,8 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     limitReached,
     clearGeneratedImage,
     clearGenerationError,
+    selectedWorld,
+    setSelectedWorld,
   } = usePhoto();
   const [showWebcam, setShowWebcam] = useState(false);
 
@@ -110,7 +116,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.4.0 — PHASE 5
+            v0.5.0 — PHASE 6
           </p>
         </main>
       </div>
@@ -148,7 +154,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.4.0 — PHASE 5
+            v0.5.0 — PHASE 6
           </p>
         </main>
       </div>
@@ -193,9 +199,16 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
               onCancel={handleWebcamCancel}
             />
           ) : photo ? (
-            /* Show preview if photo selected */
-            <div className="flex flex-col items-center gap-6">
+            /* Show preview and world selection if photo selected */
+            <div className="flex flex-col items-center gap-8">
               <PhotoPreview maxSize={320} showInfo showClear />
+
+              {/* World Selection */}
+              <WorldSelector
+                selectedWorldId={selectedWorld}
+                onWorldChange={setSelectedWorld}
+                disabled={isGenerating}
+              />
 
               {/* Mode switch when photo exists */}
               <div className="flex items-center gap-6 text-sm text-[#666666]">
@@ -278,7 +291,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
         {/* Version footer */}
         <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-          v0.4.0 — PHASE 5
+          v0.5.0 — PHASE 6
         </p>
       </main>
     </div>
