@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * Panel 01 — Photo Input & Generation Screen
+ * Panel 01 — Photo Input, Generation & Player Card Screen
  *
- * Phase 4: Client-side photo input with AI generation
+ * Phase 5: Complete flow from photo to downloadable Player Card
  * - Upload photo via file picker or drag-and-drop
  * - Optional webcam capture
  * - Preview selected photo
  * - Generate pixel-art via OpenRouter API
- * - Display generated result
+ * - Display generated result as Player Card
+ * - Download composed Player Card as PNG
  * - Per-session generation limit
  */
 
@@ -17,6 +18,7 @@ import { usePhoto } from "@/context";
 import { PhotoUpload } from "./PhotoUpload";
 import { PhotoPreview } from "./PhotoPreview";
 import { WebcamCapture } from "./WebcamCapture";
+import { PlayerCard } from "./PlayerCard";
 
 interface Panel01Props {
   /** Callback to go back to title screen */
@@ -62,13 +64,13 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     setShowWebcam(false);
   }, []);
 
-  // Show generated result
+  // Show generated result with Player Card
   if (generatedImage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
-        <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-12 px-8 py-16">
+        <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-8 px-8 py-12">
           {/* Header */}
-          <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex flex-col items-center gap-2 text-center">
             <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
               YOUR PIXEL LEGEND
             </h1>
@@ -77,40 +79,30 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
             </p>
           </div>
 
-          {/* Generated image display */}
-          <div className="flex flex-col items-center gap-6">
-            <div className="border-4 border-[#666666] bg-[#111111] p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={generatedImage}
-                alt="Generated pixel art character"
-                className="max-h-80 max-w-80 object-contain"
-                style={{ imageRendering: "pixelated" }}
-              />
-            </div>
+          {/* Player Card with download */}
+          <PlayerCard characterImage={generatedImage} />
 
-            {/* Generation count */}
-            <p className="text-sm tracking-wide text-[#666666]">
-              GENERATIONS: {generationsUsed} / {generationLimit}
-            </p>
-          </div>
+          {/* Generation count */}
+          <p className="text-sm tracking-wide text-[#666666]">
+            GENERATIONS: {generationsUsed} / {generationLimit}
+          </p>
 
           {/* Actions */}
-          <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center gap-4">
             {!limitReached && (
               <button
                 type="button"
                 onClick={handleTryAgain}
-                className="text-2xl tracking-widest text-white transition-opacity hover:opacity-70"
+                className="text-xl tracking-widest text-[#888888] transition-colors hover:text-white"
               >
-                TRY AGAIN
+                [ TRY AGAIN ]
               </button>
             )}
 
             <button
               type="button"
               onClick={handleBack}
-              className="text-lg tracking-wide text-[#888888] transition-colors hover:text-white"
+              className="text-lg tracking-wide text-[#666666] transition-colors hover:text-white"
             >
               START OVER
             </button>
@@ -118,7 +110,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.3.0 — PHASE 4
+            v0.4.0 — PHASE 5
           </p>
         </main>
       </div>
@@ -156,7 +148,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
           {/* Version footer */}
           <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v0.3.0 — PHASE 4
+            v0.4.0 — PHASE 5
           </p>
         </main>
       </div>
@@ -286,7 +278,7 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
 
         {/* Version footer */}
         <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-          v0.3.0 — PHASE 4
+          v0.4.0 — PHASE 5
         </p>
       </main>
     </div>

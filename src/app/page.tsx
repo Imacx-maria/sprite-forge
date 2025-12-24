@@ -3,13 +3,13 @@
 /**
  * SPRITE FORGE — Main Application
  *
- * Phase 4: AI-powered pixel art generation
+ * Phase 5: Player Card generation with download
  * - Panel 00: Title / Attract Screen
- * - Panel 01: Photo Input, Generation, and Results
+ * - Panel 01: Photo Input, Generation, Player Card & Download
  *
  * Navigation handled via PhotoContext state.
  * All data is held in memory only (no persistence).
- * Images are NOT saved anywhere - they exist only in the response.
+ * Cards are composed in-memory and downloaded directly.
  */
 
 import { useCallback } from "react";
@@ -57,7 +57,7 @@ function Panel00TitleScreen() {
 
         {/* Footer hint */}
         <p className="absolute bottom-8 text-sm tracking-wide text-[#444444]">
-          v0.3.0 — PHASE 4
+          v0.4.0 — PHASE 5
         </p>
       </main>
     </div>
