@@ -7,6 +7,23 @@
  */
 
 /**
+ * Output dimensions for image generation
+ * V2: Explicit aspect ratios for card and scene
+ */
+export const OUTPUT_DIMENSIONS = {
+  /** Player Card: Portrait format (3:4 aspect ratio) */
+  CARD: {
+    WIDTH: 1728,
+    HEIGHT: 2304,
+  },
+  /** World Scene: Landscape format (16:9 aspect ratio) */
+  SCENE: {
+    WIDTH: 2560,
+    HEIGHT: 1440,
+  },
+} as const;
+
+/**
  * Image generation request
  */
 export interface GenerateImageRequest {
@@ -16,6 +33,10 @@ export interface GenerateImageRequest {
   mimeType: string;
   /** Generation prompt */
   prompt: string;
+  /** Output image width in pixels (optional) */
+  width?: number;
+  /** Output image height in pixels (optional) */
+  height?: number;
 }
 
 /**

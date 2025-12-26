@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
  * - Optionally store temporarily for processing
  * - Return upload confirmation
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   // Phase 4+: Server-side upload handling if needed
   return NextResponse.json(
     {

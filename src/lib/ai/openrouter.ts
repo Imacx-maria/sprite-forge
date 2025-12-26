@@ -2,6 +2,8 @@
  * OpenRouter Provider Implementation
  *
  * Phase 4: OpenRouter-specific AI generation logic
+ * V2: Uses provider adapter for dimension mapping (no conflicting presets)
+ *
  * This file contains ALL OpenRouter-specific code.
  * App code must NOT import from this file directly.
  *
@@ -15,6 +17,11 @@ import type {
   GenerateImageResponse,
   ProviderConfig,
 } from "./types";
+import {
+  buildImageRequestPayload,
+  validateNoConflictingDimensions,
+  type TargetSize,
+} from "./provider-adapter";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_TIMEOUT = 60000; // 60 seconds
@@ -41,11 +48,14 @@ export class OpenRouterProvider implements AIProvider {
   ): Promise<GenerateImageResponse> {
     // [DIAGNOSTIC] Generate request ID for tracing
     const requestId = Math.random().toString(36).substring(2, 8);
+    const debugEnabled = process.env.DEBUG_IMAGE_PAYLOAD === "1";
+
     console.log(`[OpenRouter:${requestId}] ===== generateImage CALLED =====`);
     console.log(`[OpenRouter:${requestId}] Prompt preview (first 100 chars):`, request.prompt?.substring(0, 100));
     console.log(`[OpenRouter:${requestId}] Prompt length:`, request.prompt?.length || 0);
     console.log(`[OpenRouter:${requestId}] MimeType:`, request.mimeType);
     console.log(`[OpenRouter:${requestId}] Image base64 length:`, request.imageBase64?.length || 0);
+    console.log(`[OpenRouter:${requestId}] Requested dimensions: ${request.width || 'default'}x${request.height || 'default'}`);
 
     // Validate API key
     if (!this.config.apiKey) {
@@ -58,35 +68,36 @@ export class OpenRouterProvider implements AIProvider {
     }
 
     try {
-      // Build the request payload for OpenRouter
-      // Using chat completions with image input
-      const payload = {
-        model: this.config.model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: request.prompt,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${request.mimeType};base64,${request.imageBase64}`,
-                },
-              },
-            ],
-          },
-        ],
-        // Request image output
-        max_tokens: 4096,
-      };
+      // V2: Build payload using centralized provider adapter
+      // This ensures correct dimension format per provider, no conflicting presets
+      const imageDataUrl = `data:${request.mimeType};base64,${request.imageBase64}`;
+      const targetSize: TargetSize | null =
+        request.width && request.height
+          ? { width: request.width, height: request.height }
+          : null;
+
+      const payload = buildImageRequestPayload(
+        this.config.model,
+        request.prompt,
+        imageDataUrl,
+        targetSize
+      );
+
+      // V2: Validate no conflicting dimension specs
+      if (targetSize) {
+        const validation = validateNoConflictingDimensions(payload);
+        if (!validation.valid) {
+          console.error(`[OpenRouter:${requestId}] DIMENSION CONFLICT:`, validation.issues);
+        }
+      }
 
       // [DIAGNOSTIC] Log payload structure (not full image data)
       console.log(`[OpenRouter:${requestId}] Payload model:`, payload.model);
+      console.log(`[OpenRouter:${requestId}] Payload image_size:`, payload.image_size);
+      console.log(`[OpenRouter:${requestId}] Payload image_config:`, payload.image_config);
+      const messages = payload.messages as Array<{ content: Array<{ type: string }> }>;
       console.log(`[OpenRouter:${requestId}] Payload message content types:`,
-        payload.messages[0].content.map((c: { type: string }) => c.type));
+        messages[0].content.map((c: { type: string }) => c.type));
       console.log(`[OpenRouter:${requestId}] Sending request to OpenRouter...`);
 
       // Create abort controller for timeout

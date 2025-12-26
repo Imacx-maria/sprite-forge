@@ -5,9 +5,16 @@
  *
  * Phase 5: Card composition and download
  * Phase 8: Static frame assets per world
+ * V2: Direct rendering of AI-generated complete card
  *
- * - Composes card from generated image
- * - Uses world-specific static frame overlay
+ * V1 behavior (V2_MODE_ACTIVE=false):
+ * - Composes card from generated image via composePlayerCard()
+ * - Applies local frame/text/stats overlays
+ *
+ * V2 behavior (V2_MODE_ACTIVE=true):
+ * - AI generates complete card (frame + text + stats included)
+ * - Renders AI output directly, no local composition
+ *
  * - Displays preview of the card
  * - Enables PNG download
  * - No persistence
@@ -21,14 +28,13 @@ import {
   DEFAULT_CHARACTER,
   type CharacterData,
 } from "@/lib/card";
+import { V2_MODE_ACTIVE } from "@/lib/config/v2-flags";
 
 interface PlayerCardProps {
   /** Generated character image (data URL) */
   characterImage: string;
-  /** Optional character data for overlays */
+  /** Optional character data for overlays (V1 only) */
   character?: CharacterData;
-  /** Path to static frame PNG (Phase 8) */
-  framePath?: string;
   /** Callback when card is ready */
   onCardReady?: (cardDataUrl: string) => void;
 }
@@ -38,29 +44,37 @@ type CardState = "idle" | "composing" | "ready" | "error";
 export function PlayerCard({
   characterImage,
   character = DEFAULT_CHARACTER,
-  framePath,
   onCardReady,
 }: PlayerCardProps) {
   const [cardState, setCardState] = useState<CardState>("idle");
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Compose card when character image or frame changes
+  // V2: Bypass composition — AI already generated complete card
+  // V1: Compose card with local frame/text/stats overlays
   useEffect(() => {
-    // Only compose if we have an image
+    // Only process if we have an image
     if (!characterImage) {
       return;
     }
 
     let cancelled = false;
 
-    async function compose() {
+    async function processCard() {
       setCardState("composing");
       setError(null);
 
       try {
-        // Phase 8: Pass framePath to use static frame asset
-        const dataUrl = await composePlayerCard(characterImage, character, framePath);
+        let dataUrl: string;
+
+        if (V2_MODE_ACTIVE) {
+          // V2: Use AI-generated image directly (no local composition)
+          // The AI has already rendered frame, text, and stats
+          dataUrl = characterImage;
+        } else {
+          // V1: Compose card locally with frame/text/stats overlays
+          dataUrl = await composePlayerCard(characterImage, character);
+        }
 
         if (!cancelled) {
           setCardDataUrl(dataUrl);
@@ -77,12 +91,12 @@ export function PlayerCard({
       }
     }
 
-    compose();
+    processCard();
 
     return () => {
       cancelled = true;
     };
-  }, [characterImage, character, framePath, onCardReady]);
+  }, [characterImage, character, onCardReady]);
 
   const handleDownload = useCallback(() => {
     if (cardDataUrl) {

@@ -1,0 +1,27 @@
+# Street Brawler World
+# Feel: "Inserting a coin into an arcade machine"
+# Reference: 90s beat 'em up arcade games, side-scrolling street combat
+# Character: Ready for a fight, not currently fighting
+
+id: street_brawler
+displayName: Street Brawler
+description: Urban combat with neon-lit streets
+icon: "\uD83D\uDC4A"
+
+promptModifier: |
+  Gritty urban aesthetic. High contrast, neon accents on dark backgrounds. Fighting stance, ready for combat. Intense arcade beat-em-up mood.
+
+scenePromptModifier: |
+  90s ARCADE BEAT-EM-UP STAGE. Urban alleyway at night, brick walls with graffiti, neon signs, streetlights casting hard shadows. Flat ground plane for side-scrolling combat. Character in fighting stance, READY FOR A FIGHT. This should feel like inserting a coin into an arcade machine. Stage-based level design, not open world.
+
+sceneCamera: Side-scrolling view. Horizontal movement implied. Street-level perspective. Fixed height, no perspective tilt.
+
+cardTitles:
+  - FIGHTER CARD
+  - BRAWLER CARD
+  - STREET LEGEND
+  - ALLEY KING
+  - NEON FIST
+
+classLabel: Street Brawler
+framePath: /frames/street-brawler.png

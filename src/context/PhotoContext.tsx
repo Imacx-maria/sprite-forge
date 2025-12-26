@@ -29,7 +29,8 @@ import type {
   PhotoValidationResult,
 } from "@/types/photo";
 import { PHOTO_CONSTRAINTS } from "@/types/photo";
-import { DEFAULT_WORLD_ID, type WorldId } from "@/lib/worlds";
+import { DEFAULT_WORLD_ID } from "@/lib/worlds";
+import { useWorlds } from "@/lib/worlds/use-worlds";
 import { resizeImage } from "@/lib/image";
 import { generateRandomStats, generateRandomName, type PlayerStats } from "@/lib/card";
 
@@ -126,8 +127,8 @@ interface PhotoContextState {
   generationLimit: number;
   /** Whether limit has been reached */
   limitReached: boolean;
-  /** Currently selected world for generation */
-  selectedWorld: WorldId;
+  /** Currently selected world for generation (V2: string from YAML) */
+  selectedWorld: string;
   /** Player name for card (max 13 chars, auto-generated if empty) */
   playerName: string;
   /** Player stats for card (POWER/SPEED, 60-99) */
@@ -154,8 +155,8 @@ interface PhotoContextActions {
   clearAllGeneratedImages: () => void;
   /** Reset generation error */
   clearGenerationError: () => void;
-  /** Set the selected world */
-  setSelectedWorld: (worldId: WorldId) => void;
+  /** Set the selected world (V2: string from YAML) */
+  setSelectedWorld: (worldId: string) => void;
   /** Set player name (max 13 chars) */
   setPlayerName: (name: string) => void;
   /** Set player stats */
@@ -243,7 +244,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   const [cardError, setCardError] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [generationsUsed, setGenerationsUsed] = useState(0);
-  const [selectedWorld, setSelectedWorldState] = useState<WorldId>(DEFAULT_WORLD_ID);
+  const [selectedWorld, setSelectedWorldState] = useState<string>(DEFAULT_WORLD_ID);
   const [playerName, setPlayerNameState] = useState("");
   const [playerStats, setPlayerStatsState] = useState<PlayerStats>(() => generateRandomStats());
 
@@ -382,7 +383,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setSceneError(null);
   }, []);
 
-  const setSelectedWorld = useCallback((worldId: WorldId) => {
+  const setSelectedWorld = useCallback((worldId: string) => {
     setSelectedWorldState(worldId);
     // Clear generated images when world changes
     setGeneratedImage(null);
@@ -453,6 +454,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
           imageData: imageBase64,
           mimeType: photo.type,
           worldId: selectedWorld,
+          playerName,
         }),
       });
 
@@ -530,7 +532,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsGenerating(false);
     }
-  }, [photo, selectedWorld]);
+  }, [photo, selectedWorld, playerName]);
 
   /**
    * Phase 9: Advance to next reveal state

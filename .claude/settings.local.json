@@ -18,7 +18,16 @@
       "Skill(example-skills:skill-creator)",
       "Bash(dir:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(npm run verify:dimensions:*)",
+      "Skill(design-reviewer)",
+      "Bash(git config:*)",
+      "Bash(npm run lint:*)"
     ]
   }
 }

@@ -4,20 +4,23 @@
  * WorldSelector — World selection component
  *
  * Phase 6: World Selection
+ * V2: Fetches worlds from API instead of hardcoded list
+ *
  * - Displays available worlds in a grid
  * - Single selection at a time
  * - Desktop-first layout
  * - Retro gaming aesthetic
  */
 
-import { useCallback } from "react";
-import { getAllWorlds, type World, type WorldId } from "@/lib/worlds";
+import { useCallback, useEffect } from "react";
+import { useWorlds } from "@/lib/worlds/use-worlds";
+import type { WorldSummary } from "@/lib/worlds/types";
 
 interface WorldSelectorProps {
   /** Currently selected world ID */
-  selectedWorldId: WorldId;
+  selectedWorldId: string;
   /** Callback when world selection changes */
-  onWorldChange: (worldId: WorldId) => void;
+  onWorldChange: (worldId: string) => void;
   /** Whether selection is disabled (e.g., during generation) */
   disabled?: boolean;
 }
@@ -27,16 +30,63 @@ export function WorldSelector({
   onWorldChange,
   disabled = false,
 }: WorldSelectorProps) {
-  const worlds = getAllWorlds();
+  const { worlds, loading, error, defaultWorldId } = useWorlds();
+
+  // Auto-select default world when worlds load
+  useEffect(() => {
+    if (worlds.length > 0 && !selectedWorldId) {
+      onWorldChange(defaultWorldId);
+    }
+  }, [worlds, selectedWorldId, defaultWorldId, onWorldChange]);
 
   const handleSelect = useCallback(
-    (world: World) => {
+    (world: WorldSummary) => {
       if (!disabled) {
-        onWorldChange(world.id as WorldId);
+        onWorldChange(world.id);
       }
     },
     [disabled, onWorldChange]
   );
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex w-full flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-2">
+          <h2 className="text-2xl tracking-widest text-white">SELECT WORLD</h2>
+          <p className="text-lg tracking-wide text-[#666666]">LOADING...</p>
+        </div>
+        <div className="grid w-full max-w-2xl grid-cols-2 gap-4 md:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="flex h-24 flex-col items-center justify-center gap-2 border-4 border-[#333333] bg-[#111111] p-4"
+            >
+              <span className="h-8 w-8 animate-pulse rounded bg-[#333333]" />
+              <span className="h-3 w-16 animate-pulse rounded bg-[#333333]" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex w-full flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-2">
+          <h2 className="text-2xl tracking-widest text-white">SELECT WORLD</h2>
+          <p className="text-lg tracking-wide text-red-500">
+            ERROR: {error}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Get currently selected world for description
+  const selectedWorld = worlds.find((w) => w.id === selectedWorldId);
 
   return (
     <div className="flex w-full flex-col items-center gap-6">
@@ -99,11 +149,13 @@ export function WorldSelector({
       </div>
 
       {/* Selected world description */}
-      <div className="flex flex-col items-center gap-2 text-center">
-        <p className="text-lg tracking-wide text-[#888888]">
-          {worlds.find((w) => w.id === selectedWorldId)?.description}
-        </p>
-      </div>
+      {selectedWorld && (
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="text-lg tracking-wide text-[#888888]">
+            {selectedWorld.description}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

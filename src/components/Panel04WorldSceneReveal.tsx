@@ -17,7 +17,7 @@
 
 import { useCallback } from "react";
 import { usePhoto } from "@/context";
-import { getWorld } from "@/lib/worlds";
+import { useWorlds } from "@/lib/worlds";
 
 interface Panel04Props {
   /** Optional world-specific subtitle */
@@ -28,12 +28,12 @@ interface Panel04Props {
  * World-specific subtitles per spec (system-messages.md)
  */
 const WORLD_SUBTITLES: Record<string, string> = {
-  "fantasy-rpg": "A new adventure begins.",
-  "street-brawler": "No rules. No mercy.",
-  "galactic-overlord": "Your domain awaits.",
-  "space-marine": "Mission parameters loaded.",
-  "gothic-hunter": "The hunt begins.",
-  "candy-land": "Sweet dreams await.",
+  "the-escape": "Freedom is inches away.",
+  "wall-of-fire": "Keep your footing. Keep your breath.",
+  "prison-planet": "Perfection is the trap.",
+  "the-rpf": "Clock in. Hold on.",
+  "surveillance-state": "Every move is logged.",
+  "the-aftermath": "A new sky, a new road.",
 };
 
 export function Panel04WorldSceneReveal({ showSubtitle = true }: Panel04Props) {
@@ -43,15 +43,17 @@ export function Panel04WorldSceneReveal({ showSubtitle = true }: Panel04Props) {
     advanceReveal,
   } = usePhoto();
 
-  const world = getWorld(selectedWorld);
+  // Get world data from hook (client-safe)
+  const { getWorldById, loading: worldsLoading } = useWorlds();
+  const world = getWorldById(selectedWorld);
   const subtitle = WORLD_SUBTITLES[selectedWorld] || "";
 
   const handleContinue = useCallback(() => {
     advanceReveal();
   }, [advanceReveal]);
 
-  // Safety check - should never happen if flow is correct
-  if (!generatedWorldScene) {
+  // Safety check - wait for world data and generated scene
+  if (!generatedWorldScene || worldsLoading || !world) {
     return null;
   }
 

@@ -382,10 +382,10 @@ PHASE 10: Onboarding Flow        ← Last (independent, skippable for soft launc
 | Card composition | `src/lib/card/compose.ts` |
 | Card dimensions/colors | `src/lib/card/types.ts` |
 | AI prompts | `src/lib/ai/prompts.ts` |
-| Spec: system messages | `../spritify/spritify-docs/visuals/system-messages.md` |
-| Spec: player card | `../spritify/spritify-docs/visuals/player-card.md` |
-| Spec: onboarding | `../spritify/spritify-docs/product/onboarding.md` |
-| Spec: panel flow | `../spritify/spritify-docs/app/panel-flow.md` |
+| Spec: system messages | `../sp-forge-docs/visuals/system-messages.md` |
+| Spec: player card | `../sp-forge-docs/visuals/player-card.md` |
+| Spec: onboarding | `../sp-forge-docs/product/onboarding.md` |
+| Spec: panel flow | `../sp-forge-docs/app/panel-flow.md` |
 
 ---
 

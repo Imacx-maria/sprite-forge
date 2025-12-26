@@ -130,12 +130,24 @@ def generate_image(
         "max_tokens": 4096
     }
 
-    # Add image size if specified (multiple formats for compatibility)
+    # Add image size if specified
+    # V2: image_size object + image_config.aspect_ratio (no conflicting presets)
     if width and height:
-        # Top-level parameters
-        payload["width"] = width
-        payload["height"] = height
-        payload["size"] = f"{width}x{height}"
+        from math import gcd
+        divisor = gcd(width, height)
+        aspect_ratio = f"{width // divisor}:{height // divisor}"
+
+        # Seedream format: image_size object (primary authority for dimensions)
+        payload["image_size"] = {
+            "width": width,
+            "height": height
+        }
+        # Add aspect_ratio hint but NOT image_size preset
+        payload["image_config"] = {
+            "aspect_ratio": aspect_ratio
+        }
+        # Note: We intentionally do NOT include image_config.image_size preset
+        # as it can conflict with explicit dimensions on some providers
 
     headers = {
         "Content-Type": "application/json",

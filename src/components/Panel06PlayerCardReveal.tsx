@@ -13,14 +13,24 @@
  * - Helper: "This one's yours."
  * - Download buttons for both Player Card and World Scene
  * - Replay actions: "Try another world" / "Upload new character"
+ *
+ * V2 behavior (V2_MODE_ACTIVE=true):
+ * - AI generates complete card (frame + text + stats included)
+ * - PlayerCard receives only the image (no characterData, no framePath)
+ * - NameInput still shown but doesn't affect the card image
+ *
+ * V1 behavior (V2_MODE_ACTIVE=false):
+ * - PlayerCard composes card locally with frame/text/stats overlays
+ * - characterData and framePath are passed to PlayerCard
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { usePhoto } from "@/context";
-import { getWorld, getRandomCardTitle } from "@/lib/worlds";
+import { useWorlds, getRandomTitleFromSummary } from "@/lib/worlds";
 import type { CharacterData } from "@/lib/card";
 import { PlayerCard } from "./PlayerCard";
 import { NameInput } from "./NameInput";
+import { V2_MODE_ACTIVE } from "@/lib/config/v2-flags";
 
 interface Panel06Props {
   /** Callback when user wants to try another world (same photo) */
@@ -57,30 +67,43 @@ export function Panel06PlayerCardReveal({ onTryAnotherWorld, onUploadNew }: Pane
     clearPhoto,
     goToPanel,
   } = usePhoto();
+  // Get world data from hook (client-safe)
+  const { getWorldById, loading: worldsLoading } = useWorlds();
+  const world = getWorldById(selectedWorld);
 
-  const world = getWorld(selectedWorld);
+  // V1 ONLY: Card title (randomly selected from world's titles)
+  // In V2, the AI generates the card title directly
+  // Using React's recommended pattern: calculate during render instead of useEffect
+  const [cardTitle, setCardTitle] = useState(() =>
+    world ? getRandomTitleFromSummary(world) : "HERO"
+  );
+  const [prevWorldId, setPrevWorldId] = useState(world?.id);
 
-  // Card title (randomly selected from world's cardTitles)
-  const [cardTitle, setCardTitle] = useState(() => getRandomCardTitle(world));
+  // V1 ONLY: Reset title when world changes (calculated during render)
+  if (!V2_MODE_ACTIVE && world && world.id !== prevWorldId) {
+    setPrevWorldId(world.id);
+    setCardTitle(getRandomTitleFromSummary(world));
+  }
 
-  // Regenerate card title when world changes
-  useEffect(() => {
-    setCardTitle(getRandomCardTitle(world));
-  }, [world]);
-
-  // Build character data for card
-  const characterData: CharacterData = useMemo(() => ({
-    cardType: cardTitle,
-    name: playerName,
-    stats: playerStats,
-  }), [cardTitle, playerName, playerStats]);
+  // V1 ONLY: Build character data for card composition
+  // In V2, this data is not used (AI generates complete card)
+  const characterData: CharacterData | undefined = useMemo(() => {
+    if (V2_MODE_ACTIVE) {
+      return undefined;
+    }
+    return {
+      cardType: cardTitle,
+      name: playerName,
+      stats: playerStats,
+    };
+  }, [cardTitle, playerName, playerStats]);
 
   // Download world scene
   const handleDownloadScene = useCallback(() => {
     if (generatedWorldScene) {
-      downloadScene(generatedWorldScene, world.displayName);
+      downloadScene(generatedWorldScene, world?.displayName ?? "world");
     }
-  }, [generatedWorldScene, world.displayName]);
+  }, [generatedWorldScene, world?.displayName]);
 
   // Try another world (same photo)
   const handleTryAnotherWorld = useCallback(() => {
@@ -99,8 +122,8 @@ export function Panel06PlayerCardReveal({ onTryAnotherWorld, onUploadNew }: Pane
     }
   }, [clearPhoto, goToPanel, onUploadNew]);
 
-  // Safety check
-  if (!generatedCardImage) {
+  // Safety check - wait for world data and generated image
+  if (!generatedCardImage || worldsLoading || !world) {
     return null;
   }
 
@@ -119,11 +142,16 @@ export function Panel06PlayerCardReveal({ onTryAnotherWorld, onUploadNew }: Pane
 
         {/* Player Card */}
         <div className="w-full max-w-md">
-          <PlayerCard
-            characterImage={generatedCardImage}
-            character={characterData}
-            framePath={world.framePath}
-          />
+          {V2_MODE_ACTIVE ? (
+            // V2: AI-generated complete card (no composition needed)
+            <PlayerCard characterImage={generatedCardImage} />
+          ) : (
+            // V1: Local composition with frame/text/stats overlays
+            <PlayerCard
+              characterImage={generatedCardImage}
+              character={characterData}
+            />
+          )}
         </div>
 
         {/* Edit Name/Stats */}

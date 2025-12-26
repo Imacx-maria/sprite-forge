@@ -98,6 +98,12 @@ Optional:
 - `OPENROUTER_MODEL` - AI model (default: google/gemini-2.0-flash-exp:free)
 - `NEXT_PUBLIC_ENABLE_WEBCAM` - Enable webcam feature (default: true)
 
+## Documentation
+
+See the full documentation at: `../sp-forge-docs/docs/v2/00-index.md`
+
+---
+
 ## Status
 
 **v1.0.0 - Launch Ready**

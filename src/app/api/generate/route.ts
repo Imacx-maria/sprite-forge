@@ -4,9 +4,8 @@ import {
   generateDualOutput,
   isConfigured,
   type GenerateImageResponse,
-  type DualGenerationResponse,
 } from "@/lib/ai";
-import { getWorld, type WorldId } from "@/lib/worlds";
+import { getWorldById } from "@/lib/worlds";
 
 /**
  * POST /api/generate
@@ -15,6 +14,7 @@ import { getWorld, type WorldId } from "@/lib/worlds";
  * Phase 4: AI generation via OpenRouter
  * Phase 6: World-based prompt modifiers
  * Phase 8: Dual-output generation (Player Card + World Scene)
+ * V2: Uses YAML-based world loading
  *
  * Request body:
  * {
@@ -39,8 +39,9 @@ import { getWorld, type WorldId } from "@/lib/worlds";
 interface GenerateRequestBody {
   imageData: string;
   mimeType: string;
-  worldId?: WorldId;
+  worldId?: string; // V2: Now accepts any world ID string from YAML
   worldModifier?: string; // LEGACY: kept for backwards compatibility
+  playerName?: string;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -109,15 +110,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Phase 8: Use dual generation when worldId is provided
-    // Otherwise fallback to legacy single-output mode
+    // Phase 8 / V2: Use dual generation when worldId is provided
+    // Phase 9: World is loaded from in-code definitions
     if (body.worldId) {
-      const world = getWorld(body.worldId);
-      const result = await generateDualOutput(
-        body.imageData,
-        body.mimeType,
-        world
-      );
+      const world = getWorldById(body.worldId);
+
+      if (!world) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `World not found: ${body.worldId}`,
+            errorCode: "INVALID_REQUEST",
+          } satisfies GenerateImageResponse,
+          { status: 400 }
+        );
+      }
+
+      const result = await generateDualOutput(body.imageData, body.mimeType, world, {
+        name: body.playerName,
+      });
 
       // Return dual-output result
       if (result.success) {

@@ -110,7 +110,7 @@ Before PR:
 
 External docs (read-only reference):
 ```
-../spritify/spritify-docs/
+../sp-forge-docs/
 ├── prompts/prompt-architecture.md  # Prompt structure rules
 ├── visuals/player-card.md          # Card design spec
 ├── visuals/world-scene.md          # Scene design spec

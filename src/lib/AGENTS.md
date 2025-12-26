@@ -114,7 +114,7 @@ Prompts are built from:
 2. **World modifier** (`world.promptModifier` for card, `world.scenePromptModifier` for scene)
 3. **Camera rules** (`world.sceneCamera` for scene)
 
-See `../spritify/spritify-docs/prompts/prompt-architecture.md` for full spec.
+See `../sp-forge-docs/prompts/prompt-architecture.md` for full spec.
 
 ---
 

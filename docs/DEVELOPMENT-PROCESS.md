@@ -17,7 +17,7 @@ This document captures the development methodology used to build SPRITE FORGE V1
 All product design, prompts, and visual specs live in a separate docs repository:
 
 ```
-../spritify/spritify-docs/
+../sp-forge-docs/
 ├── product/               # Product definition
 │   ├── overview.md        # One-page product explanation
 │   ├── core-principles.md # Non-negotiable rules
@@ -104,7 +104,7 @@ This tells future devs: "Phase 4 created this, Phase 6 extended it, Phase 8 adde
 
 ```
 1. DESIGN DOCS FIRST
-   └── Write specs in spritify-docs/ before any code
+   └── Write specs in sp-forge-docs/ before any code
 
 2. REVIEW & APPROVE
    └── Specs reviewed before implementation begins
@@ -300,7 +300,7 @@ For new developers:
 2. `AGENTS.md` (project overview)
 3. `src/lib/AGENTS.md` (business logic)
 4. `src/components/AGENTS.md` (UI patterns)
-5. `../spritify/spritify-docs/README.md` (design specs)
+5. `../sp-forge-docs/README.md` (design specs)
 
 ### Step 2: Run Locally
 
@@ -345,11 +345,11 @@ npm run dev
 
 | What | Where |
 |------|-------|
-| Product specs | `../spritify/spritify-docs/product/` |
-| World definitions (spec) | `../spritify/spritify-docs/worlds/` |
+| Product specs | `../sp-forge-docs/product/` |
+| World definitions (spec) | `../sp-forge-docs/worlds/` |
 | World definitions (code) | `src/lib/worlds/` |
-| Visual specs | `../spritify/spritify-docs/visuals/` |
-| Prompt architecture (spec) | `../spritify/spritify-docs/prompts/` |
+| Visual specs | `../sp-forge-docs/visuals/` |
+| Prompt architecture (spec) | `../sp-forge-docs/prompts/` |
 | Prompt code | `src/lib/ai/prompts.ts` |
 | Card composition | `src/lib/card/compose.ts` |
 | Main flow component | `src/components/Panel01PhotoInput.tsx` |

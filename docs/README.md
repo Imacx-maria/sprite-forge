@@ -19,7 +19,7 @@ This folder contains implementation documentation and links to the canonical des
 The complete product specification lives in a separate docs folder:
 
 ```
-../spritify/spritify-docs/
+../sp-forge-docs/
 ```
 
 ### Key Design Documents
@@ -60,7 +60,7 @@ The complete product specification lives in a separate docs folder:
 
 ## Documentation Rules
 
-1. **Design specs are canonical** — if it's not in `spritify-docs`, it's not locked
+1. **Design specs are canonical** — if it's not in `sp-forge-docs`, it's not locked
 2. **AGENTS.md files are living docs** — updated alongside code changes
 3. **Phase annotations in code** — every file notes which phase created/modified it
 4. **Text specifications override visual references**

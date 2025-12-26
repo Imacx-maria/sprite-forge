@@ -9,7 +9,7 @@ const vt323 = VT323({
 });
 
 export const metadata: Metadata = {
-  title: "SPRITE FORGE",
+  title: "SP FORGE",
   description: "Turn selfies into pixel-perfect game memories",
 };
 

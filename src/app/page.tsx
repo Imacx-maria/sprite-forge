@@ -32,9 +32,9 @@ function Panel00TitleScreen() {
       <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-16 px-8 py-16">
         {/* Title Block */}
         <div className="flex flex-col items-center gap-6 text-center">
-          {/* SPRITE FORGE Wordmark */}
+          {/* SP FORGE Wordmark */}
           <h1 className="text-6xl tracking-wider text-white sm:text-7xl md:text-8xl">
-            SPRITE FORGE
+            SP FORGE
           </h1>
 
           {/* Tagline */}

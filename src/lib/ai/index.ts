@@ -4,6 +4,7 @@
  * Phase 4: Main entry point for AI generation
  * Phase 6: World-based prompt modifiers
  * Phase 8: Dual-output generation (Player Card + World Scene)
+ * V2: Prompt compilation + guardrails + single retry
  *
  * All app code must use this file for AI operations.
  * DO NOT import from provider files directly.
@@ -14,25 +15,51 @@
  * - Consistent error handling
  * - World-based prompt variation
  * - Parallel dual-output generation
+ * - V2: Centralized prompt compilation
+ * - V2: Output validation and retry logic
  */
 
 import { createOpenRouterProvider } from "./openrouter";
-import { buildPlayerCardPrompt, buildWorldScenePrompt } from "./prompts";
-import type {
-  AIProvider,
-  GenerateImageRequest,
-  GenerateImageResponse,
-  DualGenerationResponse,
+import { compilePrompt, hardenPrompt, type OutputType, type PromptInput } from "./prompt-compiler";
+import { validateGeneratedImageBase64 } from "./validators";
+import {
+  OUTPUT_DIMENSIONS,
+  type AIProvider,
+  type GenerateImageRequest,
+  type GenerateImageResponse,
+  type DualGenerationResponse,
 } from "./types";
 import type { WorldDefinition } from "@/lib/worlds/types";
+import {
+  generateCardContent,
+  generateLandscapeUI,
+  generateRandomName,
+  enforceNameLimit,
+} from "@/lib/card";
 
-// Re-export types for app code
+// Re-export types and constants for app code
 export type {
   GenerateImageRequest,
   GenerateImageResponse,
   GenerationErrorCode,
   DualGenerationResponse,
 } from "./types";
+export { OUTPUT_DIMENSIONS } from "./types";
+
+// V2: Export prompt compiler types
+export type { OutputType, TargetSize, CompiledPrompt, PromptInput } from "./prompt-compiler";
+export { compilePrompt, hardenPrompt } from "./prompt-compiler";
+
+// V2: Export validators
+export { validateGeneratedImageBase64, validateGenerationResult } from "./validators";
+
+// V2: Export provider adapter for centralized dimension handling
+export type { TargetSize as ProviderTargetSize } from "./provider-adapter";
+export {
+  buildDimensionPayload,
+  detectProviderType,
+  validateNoConflictingDimensions,
+} from "./provider-adapter";
 
 /**
  * Base prompt template for pixel-art character generation
@@ -159,9 +186,63 @@ export async function generatePixelArt(
 }
 
 /**
+ * V2: Generate a single output with retry logic
+ */
+async function generateWithRetry(
+  provider: AIProvider,
+  request: GenerateImageRequest,
+  outputType: OutputType
+): Promise<GenerateImageResponse> {
+  // First attempt
+  console.log(`[generateWithRetry] ${outputType.toUpperCase()}: First attempt`);
+  // DEBUG ONLY: expose the fully hydrated prompt right before the AI call
+  console.log("SPRITE FORGE FINAL PROMPT", request.prompt);
+  let result = await provider.generateImage(request);
+
+  // If successful, validate the output
+  if (result.success && result.imageBase64) {
+    const validation = validateGeneratedImageBase64(result.imageBase64);
+    if (validation.ok) {
+      console.log(`[generateWithRetry] ${outputType.toUpperCase()}: First attempt succeeded`);
+      return result;
+    }
+
+    // Validation failed - log issues
+    console.log(`[generateWithRetry] ${outputType.toUpperCase()}: Validation failed:`, validation.issues);
+  } else {
+    console.log(`[generateWithRetry] ${outputType.toUpperCase()}: First attempt failed:`, result.error);
+  }
+
+  // Retry with hardened prompt
+  console.log(`[generateWithRetry] ${outputType.toUpperCase()}: Retrying with hardened prompt`);
+  const hardenedRequest: GenerateImageRequest = {
+    ...request,
+    prompt: hardenPrompt(request.prompt),
+  };
+
+  result = await provider.generateImage(hardenedRequest);
+
+  // Validate retry result
+  if (result.success && result.imageBase64) {
+    const validation = validateGeneratedImageBase64(result.imageBase64);
+    if (validation.ok) {
+      console.log(`[generateWithRetry] ${outputType.toUpperCase()}: Retry succeeded`);
+      return result;
+    }
+    console.log(`[generateWithRetry] ${outputType.toUpperCase()}: Retry validation failed:`, validation.issues);
+  } else {
+    console.log(`[generateWithRetry] ${outputType.toUpperCase()}: Retry failed:`, result.error);
+  }
+
+  // Return whatever we got (success or failure)
+  return result;
+}
+
+/**
  * Generate BOTH Player Card and World Scene images in parallel
  *
  * Phase 8: Dual-output generation
+ * V2: Uses compilePrompt for centralized prompt assembly + retry logic
  *
  * @param imageBase64 - Base64-encoded source image
  * @param mimeType - MIME type of the source image
@@ -171,13 +252,13 @@ export async function generatePixelArt(
 export async function generateDualOutput(
   imageBase64: string,
   mimeType: string,
-  world: WorldDefinition
+  world: WorldDefinition,
+  promptInput?: PromptInput
 ): Promise<DualGenerationResponse> {
   // [DIAGNOSTIC] Log function entry
   console.log("[generateDualOutput] ========== DUAL GENERATION START ==========");
   console.log("[generateDualOutput] World ID:", world.id);
-  console.log("[generateDualOutput] World promptModifier:", world.promptModifier);
-  console.log("[generateDualOutput] World scenePromptModifier:", world.scenePromptModifier);
+  console.log("[generateDualOutput] V2: Using compilePrompt for centralized prompt assembly");
   console.log("[generateDualOutput] Image mimeType:", mimeType);
   console.log("[generateDualOutput] Image base64 length:", imageBase64?.length || 0);
 
@@ -210,80 +291,84 @@ export async function generateDualOutput(
     };
   }
 
-  // Build prompts for both outputs
-  const cardPrompt = buildPlayerCardPrompt(world.promptModifier);
-  const scenePrompt = buildWorldScenePrompt(
-    world.scenePromptModifier,
-    world.sceneCamera
-  );
+  const resolvedName =
+    promptInput?.name && promptInput.name.trim().length > 0
+      ? enforceNameLimit(promptInput.name)
+      : generateRandomName();
+  const cardContent = promptInput?.cardContent ?? generateCardContent(world);
+  const sceneUI = promptInput?.sceneUI ?? generateLandscapeUI(world);
+  const resolvedPromptInput: PromptInput = {
+    ...promptInput,
+    name: resolvedName,
+    cardContent,
+    sceneUI,
+  };
 
-  // [DIAGNOSTIC] Log constructed prompts
-  console.log("[generateDualOutput] ===== PLAYER CARD PROMPT =====");
-  console.log(cardPrompt);
-  console.log("[generateDualOutput] ===== PLAYER CARD PROMPT END =====");
-  console.log("[generateDualOutput] Card prompt length:", cardPrompt?.length || 0);
-  console.log("[generateDualOutput] Card prompt undefined?", cardPrompt === undefined);
-  console.log("[generateDualOutput] Card prompt empty?", cardPrompt === "");
+  // V2: Use compilePrompt for centralized prompt assembly
+  const cardCompiled = compilePrompt(world, resolvedPromptInput, "card");
+  const sceneCompiled = compilePrompt(world, resolvedPromptInput, "scene");
 
-  console.log("[generateDualOutput] ===== WORLD SCENE PROMPT =====");
-  console.log(scenePrompt);
-  console.log("[generateDualOutput] ===== WORLD SCENE PROMPT END =====");
-  console.log("[generateDualOutput] Scene prompt length:", scenePrompt?.length || 0);
+  // [DIAGNOSTIC] Log compiled prompts
+  console.log("[generateDualOutput] ===== V2 COMPILED CARD PROMPT =====");
+  console.log("[generateDualOutput] Card prompt length:", cardCompiled.prompt.length);
+  console.log("[generateDualOutput] Card target size:", cardCompiled.targetSize);
+  console.log("[generateDualOutput] Card aspect ratio:", cardCompiled.aspectRatio);
+
+  console.log("[generateDualOutput] ===== V2 COMPILED SCENE PROMPT =====");
+  console.log("[generateDualOutput] Scene prompt length:", sceneCompiled.prompt.length);
+  console.log("[generateDualOutput] Scene target size:", sceneCompiled.targetSize);
+  console.log("[generateDualOutput] Scene aspect ratio:", sceneCompiled.aspectRatio);
 
   // Get provider
   const provider = getProvider();
 
   // [DIAGNOSTIC] Log before parallel generation
-  console.log("[generateDualOutput] Starting parallel generation...");
-  console.log("[generateDualOutput] SCENE: Request will be sent NOW");
-  console.log("[generateDualOutput] SCENE: Prompt non-empty?", scenePrompt.length > 0);
-  console.log("[generateDualOutput] SCENE: Prompt length:", scenePrompt.length);
+  console.log("[generateDualOutput] Starting parallel generation with retry logic...");
+  console.log("[generateDualOutput] CARD dimensions:", cardCompiled.targetSize.width, "x", cardCompiled.targetSize.height);
+  console.log("[generateDualOutput] SCENE dimensions:", sceneCompiled.targetSize.width, "x", sceneCompiled.targetSize.height);
 
-  // Run BOTH generations in parallel
-  // Using separate promises to add individual logging
-  const cardPromise = provider.generateImage({
-    imageBase64,
-    mimeType,
-    prompt: cardPrompt,
-  }).then(result => {
-    console.log("[generateDualOutput] CARD: Promise resolved");
-    console.log("[generateDualOutput] CARD: success=", result.success);
+  // V2: Run BOTH generations in parallel with retry logic
+  const cardPromise = generateWithRetry(
+    provider,
+    {
+      imageBase64,
+      mimeType,
+      prompt: cardCompiled.prompt,
+      width: cardCompiled.targetSize.width,
+      height: cardCompiled.targetSize.height,
+    },
+    "card"
+  ).then(result => {
+    console.log("[generateDualOutput] CARD: Final result - success=", result.success);
     return result;
-  }).catch(err => {
-    console.log("[generateDualOutput] CARD: Promise REJECTED:", err);
-    throw err;
   });
 
-  const scenePromise = provider.generateImage({
-    imageBase64,
-    mimeType,
-    prompt: scenePrompt,
-  }).then(result => {
-    console.log("[generateDualOutput] SCENE: Promise resolved");
-    console.log("[generateDualOutput] SCENE: success=", result.success);
-    console.log("[generateDualOutput] SCENE: error=", result.error);
-    console.log("[generateDualOutput] SCENE: errorCode=", result.errorCode);
-    console.log("[generateDualOutput] SCENE: has imageBase64=", !!result.imageBase64);
+  const scenePromise = generateWithRetry(
+    provider,
+    {
+      imageBase64,
+      mimeType,
+      prompt: sceneCompiled.prompt,
+      width: sceneCompiled.targetSize.width,
+      height: sceneCompiled.targetSize.height,
+    },
+    "scene"
+  ).then(result => {
+    console.log("[generateDualOutput] SCENE: Final result - success=", result.success);
     return result;
-  }).catch(err => {
-    console.log("[generateDualOutput] SCENE: Promise REJECTED:", err);
-    throw err;
   });
 
   const [cardResult, sceneResult] = await Promise.all([cardPromise, scenePromise]);
 
   // [DIAGNOSTIC] Log results
-  console.log("[generateDualOutput] ===== CARD RESULT =====");
+  console.log("[generateDualOutput] ===== FINAL RESULTS =====");
   console.log("[generateDualOutput] Card success:", cardResult.success);
   console.log("[generateDualOutput] Card error:", cardResult.error);
-  console.log("[generateDualOutput] Card errorCode:", cardResult.errorCode);
   console.log("[generateDualOutput] Card has imageBase64:", !!cardResult.imageBase64);
   console.log("[generateDualOutput] Card imageBase64 length:", cardResult.imageBase64?.length || 0);
 
-  console.log("[generateDualOutput] ===== SCENE RESULT =====");
   console.log("[generateDualOutput] Scene success:", sceneResult.success);
   console.log("[generateDualOutput] Scene error:", sceneResult.error);
-  console.log("[generateDualOutput] Scene errorCode:", sceneResult.errorCode);
   console.log("[generateDualOutput] Scene has imageBase64:", !!sceneResult.imageBase64);
   console.log("[generateDualOutput] Scene imageBase64 length:", sceneResult.imageBase64?.length || 0);
 

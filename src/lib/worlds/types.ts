@@ -1,36 +1,63 @@
 /**
- * World Definition Type
- * Phase 6: Data contract for world themes
- * Phase 8: Extended for dual-output generation (Player Card + World Scene)
+ * Phase 11: World-based randomization pools for card and landscape generation
  */
 
+export interface StatPool {
+  label: string;
+  values: string[];
+}
+
+export interface UIElementPool {
+  label: string;
+  values: string[];
+}
+
 export interface WorldDefinition {
-  /** Unique identifier for the world */
   id: string;
-  /** Display name shown in UI */
   displayName: string;
-  /** Short description of the world theme */
   description: string;
-  /** Icon/emoji for visual identification */
   icon: string;
-  /** Additive style guidance for Player Card generation prompt */
+  worldLabel: string;
+
+  titles: string[];
+  classes: string[];
+  statPools: StatPool[];      // at least 4 pools per world
+  uiExtras: UIElementPool[];
+
+  // Image-generation modifiers (art only)
   promptModifier: string;
-  /** Environment description for World Scene generation */
   scenePromptModifier: string;
-  /** Camera style for World Scene (isometric, side-scroll, etc.) */
   sceneCamera: string;
-  /** Card header text variations (randomly selected) */
-  cardTitles: string[];
-  /** Character class label for the card */
-  classLabel: string;
-  /** Path to static frame PNG asset */
   framePath: string;
+
+  // Optional dimension overrides (for prompt-compiler compatibility)
+  cardAspectRatio?: string;
+  sceneAspectRatio?: string;
+  cardDimensions?: { width: number; height: number };
+  sceneDimensions?: { width: number; height: number };
+}
+
+export interface GeneratedCardContent {
+  title: string;
+  classLabel: string;
+  stats: Array<{ label: string; value: string }>;
+}
+
+export interface GeneratedLandscapeUI {
+  hearts: string;
+  score: string;
+  lives: string;
+  extra: { label: string; value: string };
 }
 
 /**
- * Get a random card title from the world's available titles
+ * Lightweight world summary for UI selection
  */
-export function getRandomCardTitle(world: WorldDefinition): string {
-  const titles = world.cardTitles;
-  return titles[Math.floor(Math.random() * titles.length)];
+export interface WorldSummary {
+  id: string;
+  worldLabel: string;
+  displayName: string;
+  description: string;
+  icon: string;
+  titles: string[];
 }

@@ -93,7 +93,7 @@ NEXT_PUBLIC_ACCESS_CODE=...
 
 External design docs (read-only):
 ```
-../spritify/spritify-docs/
+../sp-forge-docs/
 ├── prompts/prompt-architecture.md   # How prompts are structured
 ├── visuals/player-card.md           # Card design spec
 ├── visuals/world-scene.md           # Scene design spec

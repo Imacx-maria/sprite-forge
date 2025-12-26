@@ -2,7 +2,7 @@
  * Card Composition Library
  *
  * Phase 5: Player Card generation
- * Phase 0 Final: Card type, name (13 char), and stats
+ * Phase 11: World-based randomization pools for card and landscape generation
  */
 
 export { composePlayerCard, downloadCard } from "./compose";
@@ -18,3 +18,6 @@ export {
   type CharacterData,
   type PlayerStats,
 } from "./types";
+
+// Phase 11: World-based randomization
+export * from './randomize';
