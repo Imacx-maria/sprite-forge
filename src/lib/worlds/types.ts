@@ -19,10 +19,18 @@ export interface WorldDefinition {
   scenePromptModifier: string;
   /** Camera style for World Scene (isometric, side-scroll, etc.) */
   sceneCamera: string;
-  /** Card header text ("HERO CARD", "FIGHTER CARD", etc.) */
-  cardType: string;
+  /** Card header text variations (randomly selected) */
+  cardTitles: string[];
   /** Character class label for the card */
   classLabel: string;
   /** Path to static frame PNG asset */
   framePath: string;
+}
+
+/**
+ * Get a random card title from the world's available titles
+ */
+export function getRandomCardTitle(world: WorldDefinition): string {
+  const titles = world.cardTitles;
+  return titles[Math.floor(Math.random() * titles.length)];
 }

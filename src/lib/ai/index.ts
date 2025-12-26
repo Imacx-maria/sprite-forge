@@ -173,8 +173,17 @@ export async function generateDualOutput(
   mimeType: string,
   world: WorldDefinition
 ): Promise<DualGenerationResponse> {
+  // [DIAGNOSTIC] Log function entry
+  console.log("[generateDualOutput] ========== DUAL GENERATION START ==========");
+  console.log("[generateDualOutput] World ID:", world.id);
+  console.log("[generateDualOutput] World promptModifier:", world.promptModifier);
+  console.log("[generateDualOutput] World scenePromptModifier:", world.scenePromptModifier);
+  console.log("[generateDualOutput] Image mimeType:", mimeType);
+  console.log("[generateDualOutput] Image base64 length:", imageBase64?.length || 0);
+
   // Check configuration
   if (!isConfigured()) {
+    console.log("[generateDualOutput] ABORT: API key not configured");
     return {
       success: false,
       error: "AI generation is not configured. OPENROUTER_API_KEY is missing.",
@@ -184,6 +193,7 @@ export async function generateDualOutput(
 
   // Validate input
   if (!imageBase64) {
+    console.log("[generateDualOutput] ABORT: No image data");
     return {
       success: false,
       error: "No image data provided",
@@ -192,6 +202,7 @@ export async function generateDualOutput(
   }
 
   if (!mimeType || !mimeType.startsWith("image/")) {
+    console.log("[generateDualOutput] ABORT: Invalid mimeType:", mimeType);
     return {
       success: false,
       error: "Invalid image type",
@@ -206,25 +217,81 @@ export async function generateDualOutput(
     world.sceneCamera
   );
 
+  // [DIAGNOSTIC] Log constructed prompts
+  console.log("[generateDualOutput] ===== PLAYER CARD PROMPT =====");
+  console.log(cardPrompt);
+  console.log("[generateDualOutput] ===== PLAYER CARD PROMPT END =====");
+  console.log("[generateDualOutput] Card prompt length:", cardPrompt?.length || 0);
+  console.log("[generateDualOutput] Card prompt undefined?", cardPrompt === undefined);
+  console.log("[generateDualOutput] Card prompt empty?", cardPrompt === "");
+
+  console.log("[generateDualOutput] ===== WORLD SCENE PROMPT =====");
+  console.log(scenePrompt);
+  console.log("[generateDualOutput] ===== WORLD SCENE PROMPT END =====");
+  console.log("[generateDualOutput] Scene prompt length:", scenePrompt?.length || 0);
+
   // Get provider
   const provider = getProvider();
 
+  // [DIAGNOSTIC] Log before parallel generation
+  console.log("[generateDualOutput] Starting parallel generation...");
+  console.log("[generateDualOutput] SCENE: Request will be sent NOW");
+  console.log("[generateDualOutput] SCENE: Prompt non-empty?", scenePrompt.length > 0);
+  console.log("[generateDualOutput] SCENE: Prompt length:", scenePrompt.length);
+
   // Run BOTH generations in parallel
-  const [cardResult, sceneResult] = await Promise.all([
-    provider.generateImage({
-      imageBase64,
-      mimeType,
-      prompt: cardPrompt,
-    }),
-    provider.generateImage({
-      imageBase64,
-      mimeType,
-      prompt: scenePrompt,
-    }),
-  ]);
+  // Using separate promises to add individual logging
+  const cardPromise = provider.generateImage({
+    imageBase64,
+    mimeType,
+    prompt: cardPrompt,
+  }).then(result => {
+    console.log("[generateDualOutput] CARD: Promise resolved");
+    console.log("[generateDualOutput] CARD: success=", result.success);
+    return result;
+  }).catch(err => {
+    console.log("[generateDualOutput] CARD: Promise REJECTED:", err);
+    throw err;
+  });
+
+  const scenePromise = provider.generateImage({
+    imageBase64,
+    mimeType,
+    prompt: scenePrompt,
+  }).then(result => {
+    console.log("[generateDualOutput] SCENE: Promise resolved");
+    console.log("[generateDualOutput] SCENE: success=", result.success);
+    console.log("[generateDualOutput] SCENE: error=", result.error);
+    console.log("[generateDualOutput] SCENE: errorCode=", result.errorCode);
+    console.log("[generateDualOutput] SCENE: has imageBase64=", !!result.imageBase64);
+    return result;
+  }).catch(err => {
+    console.log("[generateDualOutput] SCENE: Promise REJECTED:", err);
+    throw err;
+  });
+
+  const [cardResult, sceneResult] = await Promise.all([cardPromise, scenePromise]);
+
+  // [DIAGNOSTIC] Log results
+  console.log("[generateDualOutput] ===== CARD RESULT =====");
+  console.log("[generateDualOutput] Card success:", cardResult.success);
+  console.log("[generateDualOutput] Card error:", cardResult.error);
+  console.log("[generateDualOutput] Card errorCode:", cardResult.errorCode);
+  console.log("[generateDualOutput] Card has imageBase64:", !!cardResult.imageBase64);
+  console.log("[generateDualOutput] Card imageBase64 length:", cardResult.imageBase64?.length || 0);
+
+  console.log("[generateDualOutput] ===== SCENE RESULT =====");
+  console.log("[generateDualOutput] Scene success:", sceneResult.success);
+  console.log("[generateDualOutput] Scene error:", sceneResult.error);
+  console.log("[generateDualOutput] Scene errorCode:", sceneResult.errorCode);
+  console.log("[generateDualOutput] Scene has imageBase64:", !!sceneResult.imageBase64);
+  console.log("[generateDualOutput] Scene imageBase64 length:", sceneResult.imageBase64?.length || 0);
 
   // Determine overall success (at least one succeeded)
   const success = cardResult.success || sceneResult.success;
+
+  console.log("[generateDualOutput] Overall success:", success);
+  console.log("[generateDualOutput] ========== DUAL GENERATION END ==========");
 
   // If both failed, return combined error
   if (!success) {

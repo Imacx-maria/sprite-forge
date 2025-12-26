@@ -1,31 +1,66 @@
 # SPRITE FORGE Documentation
 
-This folder contains or links to the canonical SPRITE FORGE documentation.
+This folder contains implementation documentation and links to the canonical design specs.
 
-## Source Documentation
+---
 
-The complete product specification lives in the `sprite-forge-docs` repository:
-
-- Product overview and principles
-- Panel flow and UX specifications
-- World definitions
-- Visual systems (Player Card, World Scene)
-- Prompt architecture
-- Asset inventory
-
-## Key Documents
+## This Folder
 
 | Document | Purpose |
 |----------|---------|
-| `handof` | Master implementation specification |
+| `README.md` | This index file |
+| `DEVELOPMENT-PROCESS.md` | **Development methodology, work ethic, and onboarding guide** |
+| `V1-COMPLETION-PLAN.md` | **Remaining V1 work: Phases 9-12 with implementation tasks** |
+
+---
+
+## Design Specifications (External)
+
+The complete product specification lives in a separate docs folder:
+
+```
+../spritify/spritify-docs/
+```
+
+### Key Design Documents
+
+| Document | Purpose |
+|----------|---------|
+| `product/overview.md` | One-page product explanation |
 | `product/core-principles.md` | Non-negotiable product rules |
-| `app/panel-flow.md` | Complete UI flow definition |
+| `product/user-flow.md` | Step-by-step user experience |
 | `visuals/player-card.md` | Player Card design system |
 | `visuals/world-scene.md` | World Scene design system |
-| `prompts/prompt-architecture.md` | Image generation prompts |
+| `prompts/prompt-architecture.md` | Image generation prompt structure |
+| `worlds/*.md` | Per-world visual specs |
+| `decisions/locked-decisions.md` | Decisions that should not be revisited |
+
+### Reading Order for New Devs
+
+1. `product/overview.md`
+2. `product/core-principles.md`
+3. `product/user-flow.md`
+4. `visuals/player-card.md`
+5. `visuals/world-scene.md`
+6. `prompts/prompt-architecture.md`
+
+---
+
+## Implementation Documentation (In Codebase)
+
+| Location | Purpose |
+|----------|---------|
+| `/CLAUDE.md` | AI assistant rules (root) |
+| `/AGENTS.md` | Project overview, universal conventions |
+| `/src/app/AGENTS.md` | App Router patterns, API routes |
+| `/src/components/AGENTS.md` | Component patterns, styling |
+| `/src/lib/AGENTS.md` | Business logic, module rules |
+
+---
 
 ## Documentation Rules
 
-1. These docs are **canonical** — if it's not documented, it doesn't exist
-2. Text specifications override visual references
-3. Changes require explicit version bumps
+1. **Design specs are canonical** — if it's not in `spritify-docs`, it's not locked
+2. **AGENTS.md files are living docs** — updated alongside code changes
+3. **Phase annotations in code** — every file notes which phase created/modified it
+4. **Text specifications override visual references**

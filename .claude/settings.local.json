@@ -3,7 +3,22 @@
     "allow": [
       "Bash(tree:*)",
       "Bash(mkdir:*)",
-      "Bash(bun run build:*)"
+      "Bash(bun run build:*)",
+      "Bash(bun run lint:*)",
+      "Bash(cat:*)",
+      "Bash(set -a)",
+      "Bash(source:*)",
+      "Bash(set +a)",
+      "Bash(bun run:*)",
+      "Bash(powershell:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint)",
+      "Bash(git checkout:*)",
+      "Bash(dir \"C:\\\\Users\\\\maria\\\\.claude\\\\skills\")",
+      "Skill(example-skills:skill-creator)",
+      "Bash(dir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

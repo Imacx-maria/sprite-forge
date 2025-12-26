@@ -5,7 +5,8 @@
  * This file contains ALL OpenRouter-specific code.
  * App code must NOT import from this file directly.
  *
- * Model: google/gemini-2.0-flash-exp:free (Nano Banana)
+ * Model is configured via OPENROUTER_MODEL env variable.
+ * Recommended: bytedance-seed/seedream-4.5 for best pixel art results.
  */
 
 import type {
@@ -38,8 +39,17 @@ export class OpenRouterProvider implements AIProvider {
   async generateImage(
     request: GenerateImageRequest
   ): Promise<GenerateImageResponse> {
+    // [DIAGNOSTIC] Generate request ID for tracing
+    const requestId = Math.random().toString(36).substring(2, 8);
+    console.log(`[OpenRouter:${requestId}] ===== generateImage CALLED =====`);
+    console.log(`[OpenRouter:${requestId}] Prompt preview (first 100 chars):`, request.prompt?.substring(0, 100));
+    console.log(`[OpenRouter:${requestId}] Prompt length:`, request.prompt?.length || 0);
+    console.log(`[OpenRouter:${requestId}] MimeType:`, request.mimeType);
+    console.log(`[OpenRouter:${requestId}] Image base64 length:`, request.imageBase64?.length || 0);
+
     // Validate API key
     if (!this.config.apiKey) {
+      console.log(`[OpenRouter:${requestId}] ABORT: No API key`);
       return {
         success: false,
         error: "OpenRouter API key is not configured",
@@ -73,6 +83,12 @@ export class OpenRouterProvider implements AIProvider {
         max_tokens: 4096,
       };
 
+      // [DIAGNOSTIC] Log payload structure (not full image data)
+      console.log(`[OpenRouter:${requestId}] Payload model:`, payload.model);
+      console.log(`[OpenRouter:${requestId}] Payload message content types:`,
+        payload.messages[0].content.map((c: { type: string }) => c.type));
+      console.log(`[OpenRouter:${requestId}] Sending request to OpenRouter...`);
+
       // Create abort controller for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(
@@ -95,11 +111,17 @@ export class OpenRouterProvider implements AIProvider {
 
         clearTimeout(timeoutId);
 
+        console.log(`[OpenRouter:${requestId}] Response status:`, response.status);
+        console.log(`[OpenRouter:${requestId}] Response ok:`, response.ok);
+
         // Handle HTTP errors
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage =
             errorData?.error?.message || `HTTP ${response.status}`;
+
+          console.log(`[OpenRouter:${requestId}] HTTP Error:`, response.status, errorMessage);
+          console.log(`[OpenRouter:${requestId}] Error data:`, JSON.stringify(errorData).substring(0, 500));
 
           if (response.status === 401) {
             return {
@@ -127,8 +149,36 @@ export class OpenRouterProvider implements AIProvider {
         // Parse response
         const data = await response.json();
 
+        // [DIAGNOSTIC] Log full response structure
+        console.log(`[OpenRouter:${requestId}] Response keys:`, Object.keys(data));
+        console.log(`[OpenRouter:${requestId}] Has choices:`, !!data?.choices);
+        console.log(`[OpenRouter:${requestId}] Choices length:`, data?.choices?.length || 0);
+        if (data?.choices?.[0]) {
+          console.log(`[OpenRouter:${requestId}] Choice[0] keys:`, Object.keys(data.choices[0]));
+        }
+
         // Extract message from response
         const message = data?.choices?.[0]?.message;
+
+        // [DIAGNOSTIC] Log message structure
+        if (message) {
+          console.log(`[OpenRouter:${requestId}] Message keys:`, Object.keys(message));
+          console.log(`[OpenRouter:${requestId}] Has message.images:`, !!message.images);
+          console.log(`[OpenRouter:${requestId}] message.images length:`, message.images?.length || 0);
+          console.log(`[OpenRouter:${requestId}] Has message.content:`, !!message.content);
+          console.log(`[OpenRouter:${requestId}] message.content type:`, typeof message.content);
+          if (Array.isArray(message.content)) {
+            console.log(`[OpenRouter:${requestId}] message.content is array, length:`, message.content.length);
+            console.log(`[OpenRouter:${requestId}] message.content types:`,
+              message.content.map((c: { type: string }) => c.type));
+          } else if (typeof message.content === "string") {
+            console.log(`[OpenRouter:${requestId}] message.content (string) length:`, message.content.length);
+            console.log(`[OpenRouter:${requestId}] message.content preview:`, message.content.substring(0, 200));
+          }
+        } else {
+          console.log(`[OpenRouter:${requestId}] NO MESSAGE in response`);
+          console.log(`[OpenRouter:${requestId}] Full response (truncated):`, JSON.stringify(data).substring(0, 1000));
+        }
 
         if (!message) {
           console.error("[OpenRouter] No message in response");

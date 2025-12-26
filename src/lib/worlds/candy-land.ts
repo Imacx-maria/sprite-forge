@@ -1,16 +1,29 @@
 import type { WorldDefinition } from "./types";
 
+/**
+ * Candy Land World
+ *
+ * Feel: "Children's board game reimagined as retro video game"
+ * Reference: Candy-themed platformers, toy-like fantasy worlds
+ * Character: Exploring a playful world, friendly and curious
+ */
 export const candyLand: WorldDefinition = {
   id: "candy-land",
   displayName: "Candy Land",
   description: "Sweet and colorful sugary world",
   icon: "🍭",
   promptModifier:
-    "Whimsical candy aesthetic. Bright pastels, pinks, candy colors, sparkles and shine. Cheerful and playful mood.",
+    "Whimsical candy aesthetic. Bright pastels, pinks, candy colors, sparkles. Friendly curious stance. Cheerful and playful mood.",
   scenePromptModifier:
-    "Magical candy kingdom. Lollipop trees, gumdrop hills, chocolate rivers. Bright sunny sky with cotton candy clouds.",
-  sceneCamera: "Top-down or isometric view. Whimsical angle.",
-  cardType: "CANDY CARD",
-  classLabel: "Candy Hero",
+    "CANDY-THEMED PLATFORMER STAGE. Magical candy kingdom with lollipop trees, gumdrop roads, chocolate hills, bright sunny sky with cotton candy clouds. Large friendly shapes, clear ground plane. Character EXPLORING A PLAYFUL WORLD, friendly relaxed stance. Fun and inviting like a children's board game reimagined as a retro video game. No combat, pure joy.",
+  sceneCamera: "Side-scrolling or light isometric view. Fixed angle. Simple readable depth. Whimsical platformer perspective.",
+  cardTitles: [
+    "SWEET SCOUT",
+    "CANDY HERO",
+    "SUGAR STAR",
+    "GUMDROP KID",
+    "LOLLIPOP LEGEND",
+  ],
+  classLabel: "Candy Explorer",
   framePath: "/frames/candyland.png",
 };

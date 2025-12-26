@@ -50,3 +50,8 @@ bun.lockb
 next-env.d.ts
 
 .vercel
+
+# tools
+/tools/output/*
+!/tools/output/.gitkeep
+/tools/test_photo.*

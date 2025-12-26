@@ -5,6 +5,7 @@
 
 import type { WorldDefinition } from "./types";
 export type { WorldDefinition } from "./types";
+export { getRandomCardTitle } from "./types";
 
 import { fantasyRpg } from "./fantasy-rpg";
 import { streetBrawler } from "./street-brawler";

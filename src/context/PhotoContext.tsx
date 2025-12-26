@@ -6,6 +6,7 @@
  * Phase 4: Manages photo data and generation in memory only.
  * Phase 6: World selection for prompt variation
  * Phase 8: Dual-output generation (Player Card + World Scene)
+ * Phase 9: Two-step reveal flow (Scene → Transition → Card)
  *
  * - No persistence (localStorage, cookies, etc.)
  * - No server-side storage
@@ -28,8 +29,20 @@ import type {
   PhotoValidationResult,
 } from "@/types/photo";
 import { PHOTO_CONSTRAINTS } from "@/types/photo";
-import { DEFAULT_WORLD_ID, getWorld, type WorldId } from "@/lib/worlds";
+import { DEFAULT_WORLD_ID, type WorldId } from "@/lib/worlds";
 import { resizeImage } from "@/lib/image";
+import { generateRandomStats, generateRandomName, type PlayerStats } from "@/lib/card";
+
+/**
+ * Phase 9: Reveal state machine
+ * Controls the two-step reveal flow after generation
+ */
+export type RevealState =
+  | "idle"           // Normal input flow
+  | "generating"     // Generation in progress
+  | "scene_reveal"   // Showing World Scene alone
+  | "transition"     // Brief transition before card
+  | "card_reveal";   // Showing Player Card with downloads
 
 /**
  * Single image generation result
@@ -49,17 +62,6 @@ interface DualGenerationResult {
   success: boolean;
   cardImage?: SingleImageResult;
   worldSceneImage?: SingleImageResult;
-  error?: string;
-  errorCode?: string;
-}
-
-/**
- * Legacy generation result (kept for backwards compatibility)
- */
-interface GenerationResult {
-  success: boolean;
-  imageBase64?: string;
-  mimeType?: string;
   error?: string;
   errorCode?: string;
 }
@@ -104,6 +106,8 @@ interface PhotoContextState {
   isGenerating: boolean;
   /** Current panel/step in the flow */
   currentPanel: number;
+  /** Phase 9: Reveal state machine */
+  revealState: RevealState;
   /** Generated image data URL (null if not generated) - LEGACY */
   generatedImage: string | null;
   /** Generated Player Card image data URL (Phase 8) */
@@ -112,9 +116,9 @@ interface PhotoContextState {
   generatedWorldScene: string | null;
   /** Generation error message */
   generationError: string | null;
-  /** Player Card generation error (Phase 8) */
+  /** Player Card generation error (Phase 8) - DEPRECATED in Phase 9 */
   cardError: string | null;
-  /** World Scene generation error (Phase 8) */
+  /** World Scene generation error (Phase 8) - DEPRECATED in Phase 9 */
   sceneError: string | null;
   /** Number of generations used this session */
   generationsUsed: number;
@@ -124,6 +128,10 @@ interface PhotoContextState {
   limitReached: boolean;
   /** Currently selected world for generation */
   selectedWorld: WorldId;
+  /** Player name for card (max 13 chars, auto-generated if empty) */
+  playerName: string;
+  /** Player stats for card (POWER/SPEED, 60-99) */
+  playerStats: PlayerStats;
 }
 
 /**
@@ -148,6 +156,16 @@ interface PhotoContextActions {
   clearGenerationError: () => void;
   /** Set the selected world */
   setSelectedWorld: (worldId: WorldId) => void;
+  /** Set player name (max 13 chars) */
+  setPlayerName: (name: string) => void;
+  /** Set player stats */
+  setPlayerStats: (stats: PlayerStats) => void;
+  /** Randomize player name and stats */
+  randomizePlayerIdentity: () => void;
+  /** Phase 9: Advance to next reveal state */
+  advanceReveal: () => void;
+  /** Phase 9: Reset reveal state to idle */
+  resetReveal: () => void;
 }
 
 type PhotoContextValue = PhotoContextState & PhotoContextActions;
@@ -215,6 +233,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentPanel, setCurrentPanel] = useState(0);
+  // Phase 9: Reveal state machine
+  const [revealState, setRevealState] = useState<RevealState>("idle");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   // Phase 8: Dual-output state
   const [generatedCardImage, setGeneratedCardImage] = useState<string | null>(null);
@@ -224,6 +244,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [generationsUsed, setGenerationsUsed] = useState(0);
   const [selectedWorld, setSelectedWorldState] = useState<WorldId>(DEFAULT_WORLD_ID);
+  const [playerName, setPlayerNameState] = useState("");
+  const [playerStats, setPlayerStatsState] = useState<PlayerStats>(() => generateRandomStats());
 
   // Use ref to track generations to avoid stale closure issues
   const generationsRef = useRef(0);
@@ -312,6 +334,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
       setGenerationError(null);
       setCardError(null);
       setSceneError(null);
+      // Phase 9: Reset reveal state
+      setRevealState("idle");
 
       return { valid: true };
     },
@@ -330,6 +354,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setGenerationError(null);
     setCardError(null);
     setSceneError(null);
+    // Phase 9: Reset reveal state
+    setRevealState("idle");
   }, [photo]);
 
   const goToPanel = useCallback((panel: number) => {
@@ -346,6 +372,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setGeneratedWorldScene(null);
     setCardError(null);
     setSceneError(null);
+    // Phase 9: Reset reveal state
+    setRevealState("idle");
   }, []);
 
   const clearGenerationError = useCallback(() => {
@@ -362,11 +390,28 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     setGeneratedWorldScene(null);
     setCardError(null);
     setSceneError(null);
+    // Phase 9: Reset reveal state
+    setRevealState("idle");
+  }, []);
+
+  const setPlayerName = useCallback((name: string) => {
+    // Enforce 13 character limit
+    setPlayerNameState(name.substring(0, 13).toUpperCase());
+  }, []);
+
+  const setPlayerStats = useCallback((stats: PlayerStats) => {
+    setPlayerStatsState(stats);
+  }, []);
+
+  const randomizePlayerIdentity = useCallback(() => {
+    setPlayerNameState(generateRandomName());
+    setPlayerStatsState(generateRandomStats());
   }, []);
 
   /**
    * Generate pixel art from the current photo
    * Phase 8: Calls dual-output API for both Player Card and World Scene
+   * Phase 9: Enforces BOTH outputs must succeed (no partial success)
    */
   const generatePixelArt = useCallback(async (): Promise<DualGenerationResult> => {
     // Check if photo exists
@@ -388,6 +433,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     }
 
     setIsGenerating(true);
+    // Phase 9: Set reveal state to generating
+    setRevealState("generating");
     setGenerationError(null);
     setCardError(null);
     setSceneError(null);
@@ -415,8 +462,9 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
         result = await response.json();
       } catch {
         // Non-JSON response - treat as server error
-        const errorMessage = getUserFriendlyError("API_ERROR");
+        const errorMessage = "Something went wrong in this timeline.";
         setGenerationError(errorMessage);
+        setRevealState("idle");
         return {
           success: false,
           error: errorMessage,
@@ -424,49 +472,55 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // Check for success (at least one image generated)
+      // Check for success
       if (response.ok && result.success) {
-        // Increment generation count
+        // Phase 9: BOTH outputs must succeed - no partial success allowed
+        const cardSuccess = result.cardImage?.success && result.cardImage.imageBase64 && result.cardImage.mimeType;
+        const sceneSuccess = result.worldSceneImage?.success && result.worldSceneImage.imageBase64 && result.worldSceneImage.mimeType;
+
+        if (!cardSuccess || !sceneSuccess) {
+          // Partial failure - treat as complete failure per spec
+          const errorMessage = "Something went wrong in this timeline.";
+          setGenerationError(errorMessage);
+          setRevealState("idle");
+          return {
+            success: false,
+            error: errorMessage,
+            errorCode: "GENERATION_FAILED",
+          };
+        }
+
+        // Both outputs succeeded - increment count and set images
         generationsRef.current += 1;
         setGenerationsUsed(generationsRef.current);
 
-        // Process Player Card image
-        if (result.cardImage?.success && result.cardImage.imageBase64 && result.cardImage.mimeType) {
-          const cardDataUrl = `data:${result.cardImage.mimeType};base64,${result.cardImage.imageBase64}`;
-          setGeneratedCardImage(cardDataUrl);
-          // Also set legacy field for backwards compatibility
-          setGeneratedImage(cardDataUrl);
-        } else if (result.cardImage?.error) {
-          const cardErrorMsg = getUserFriendlyError(result.cardImage.errorCode, result.cardImage.error);
-          setCardError(cardErrorMsg);
-        }
+        // Set both images
+        const cardDataUrl = `data:${result.cardImage!.mimeType};base64,${result.cardImage!.imageBase64}`;
+        const sceneDataUrl = `data:${result.worldSceneImage!.mimeType};base64,${result.worldSceneImage!.imageBase64}`;
 
-        // Process World Scene image
-        if (result.worldSceneImage?.success && result.worldSceneImage.imageBase64 && result.worldSceneImage.mimeType) {
-          const sceneDataUrl = `data:${result.worldSceneImage.mimeType};base64,${result.worldSceneImage.imageBase64}`;
-          setGeneratedWorldScene(sceneDataUrl);
-        } else if (result.worldSceneImage?.error) {
-          const sceneErrorMsg = getUserFriendlyError(result.worldSceneImage.errorCode, result.worldSceneImage.error);
-          setSceneError(sceneErrorMsg);
-        }
+        setGeneratedCardImage(cardDataUrl);
+        setGeneratedImage(cardDataUrl); // Legacy compatibility
+        setGeneratedWorldScene(sceneDataUrl);
+
+        // Phase 9: Enter scene reveal state
+        setRevealState("scene_reveal");
 
         return result;
       }
 
       // Handle error responses (both HTTP errors and success: false)
-      const userMessage = getUserFriendlyError(result.errorCode, result.error);
+      const userMessage = "Something went wrong in this timeline.";
       setGenerationError(userMessage);
+      setRevealState("idle");
       return {
         ...result,
         error: userMessage,
       };
     } catch (error) {
       // Network error or other exception
-      const errorMessage = getUserFriendlyError(
-        "UNKNOWN",
-        error instanceof Error ? error.message : undefined
-      );
+      const errorMessage = "Something went wrong in this timeline.";
       setGenerationError(errorMessage);
+      setRevealState("idle");
 
       return {
         success: false,
@@ -478,6 +532,30 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     }
   }, [photo, selectedWorld]);
 
+  /**
+   * Phase 9: Advance to next reveal state
+   * idle → generating → scene_reveal → transition → card_reveal
+   */
+  const advanceReveal = useCallback(() => {
+    setRevealState((current) => {
+      switch (current) {
+        case "scene_reveal":
+          return "transition";
+        case "transition":
+          return "card_reveal";
+        default:
+          return current;
+      }
+    });
+  }, []);
+
+  /**
+   * Phase 9: Reset reveal state to idle (for retry/restart)
+   */
+  const resetReveal = useCallback(() => {
+    setRevealState("idle");
+  }, []);
+
   const value: PhotoContextValue = {
     // State
     photo,
@@ -485,6 +563,7 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     isLoading,
     isGenerating,
     currentPanel,
+    revealState,
     generatedImage,
     generatedCardImage,
     generatedWorldScene,
@@ -495,6 +574,8 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     generationLimit: SESSION_GENERATION_LIMIT,
     limitReached,
     selectedWorld,
+    playerName,
+    playerStats,
     // Actions
     setPhotoFromFile,
     clearPhoto,
@@ -505,6 +586,11 @@ export function PhotoProvider({ children }: { children: ReactNode }) {
     clearAllGeneratedImages,
     clearGenerationError,
     setSelectedWorld,
+    setPlayerName,
+    setPlayerStats,
+    randomizePlayerIdentity,
+    advanceReveal,
+    resetReveal,
   };
 
   return (

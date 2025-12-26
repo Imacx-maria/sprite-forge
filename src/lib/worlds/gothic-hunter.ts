@@ -1,16 +1,29 @@
 import type { WorldDefinition } from "./types";
 
+/**
+ * Gothic Hunter World
+ *
+ * Feel: "Haunted castle level at dusk"
+ * Reference: Gothic action-adventure games, dark fantasy stages
+ * Character: Hunter on watch, vigilant and composed, not mid-battle
+ */
 export const gothicHunter: WorldDefinition = {
   id: "gothic-hunter",
   displayName: "Gothic Hunter",
   description: "Dark Victorian monster slayer",
   icon: "🦇",
   promptModifier:
-    "Dark Victorian gothic aesthetic. Deep purples, blacks, silver accents, period clothing details. Mysterious and brooding mood.",
+    "Dark Victorian gothic aesthetic. Deep purples, blacks, silver accents. Calm resolute stance, vigilant hunter. Mysterious and dramatic mood.",
   scenePromptModifier:
-    "Victorian gothic cityscape. Foggy cobblestone streets, gas lamps, dark architecture. Moonlit night with ominous atmosphere.",
-  sceneCamera: "Side-scrolling view. Street-level perspective.",
-  cardType: "HUNTER CARD",
+    "GOTHIC ACTION-ADVENTURE CASTLE STAGE. Stone castle corridors, arched windows, wall-mounted torches, staircases and pillars. Emphasis on VERTICAL SPACE and heavy shadows. Strong light-shadow contrast. Character as HUNTER ON WATCH, vigilant not mid-battle. Theatrical and ominous atmosphere, like a haunted castle level at dusk.",
+  sceneCamera: "Side view or light isometric. Emphasis on vertical space. Tall structures framing the scene.",
+  cardTitles: [
+    "HUNTER CARD",
+    "NIGHTSTALKER",
+    "SHADOW BLADE",
+    "DUSK WARDEN",
+    "VAMPIRE SLAYER",
+  ],
   classLabel: "Gothic Hunter",
   framePath: "/frames/gothic-hunter.png",
 };

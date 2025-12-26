@@ -1,16 +1,29 @@
 import type { WorldDefinition } from "./types";
 
+/**
+ * Fantasy RPG World
+ *
+ * Feel: "Opening village of a beloved RPG"
+ * Reference: 16-bit JRPGs, overworld village screens
+ * Character: Awaiting a quest, hero-in-progress
+ */
 export const fantasyRpg: WorldDefinition = {
   id: "fantasy-rpg",
   displayName: "Fantasy RPG",
   description: "Medieval fantasy with magic and dragons",
   icon: "⚔️",
   promptModifier:
-    "Medieval fantasy aesthetic. Warm earth tones, golden highlights, mystical glow effects. Heroic and adventurous mood.",
+    "Medieval fantasy aesthetic. Warm earth tones, golden highlights, mystical glow. Heroic adventurer ready for a quest. Hopeful and nostalgic mood.",
   scenePromptModifier:
-    "Medieval fantasy village. Cobblestone paths and small buildings. Greenery and open sky. Peaceful, inviting atmosphere.",
-  sceneCamera: "Top-down or isometric view. Fixed angle.",
-  cardType: "HERO CARD",
+    "16-BIT JRPG OVERWORLD VILLAGE SCREEN. Medieval fantasy village with cobblestone paths, small cottages, grass and trees, fences, open sky. Scene feels EXPLORABLE like a classic RPG town. Character in neutral ready stance, AWAITING A QUEST. Clear paths and walkable space implied. Peaceful, inviting, nostalgic atmosphere.",
+  sceneCamera: "Top-down or isometric view. Fixed angle, no rotation. Overworld exploration perspective.",
+  cardTitles: [
+    "HERO CARD",
+    "ADVENTURER",
+    "QUEST SEEKER",
+    "BRAVE SOUL",
+    "CHOSEN ONE",
+  ],
   classLabel: "Fantasy Hero",
   framePath: "/frames/fantasy-rpg.png",
 };

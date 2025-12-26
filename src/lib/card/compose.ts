@@ -3,124 +3,169 @@
  *
  * Phase 5: Composes Player Card layers in-memory using canvas
  * Phase 8: Static frame assets per world
+ * Phase 0 Final: Card type title, player name, and stats overlay (no backgrounds)
  *
  * - No disk persistence
  * - No external services
  * - Deterministic output
  *
- * Composition order:
- * 1. Background
- * 2. Generated character image
- * 3. Frame overlay (static PNG per world)
- * 4. Text overlays
+ * FULL-BLEED DESIGN:
+ * The AI-generated artwork fills the entire card canvas edge-to-edge.
+ * NO app-added backgrounds behind the artwork.
+ *
+ * Composition order (CRITICAL):
+ * 1. Full-bleed character artwork (COVER scaling, no letterbox)
+ * 2. Frame overlay (static PNG per world)
+ * 3. Text overlays (card type, name, stats - no background panels)
+ *
+ * AI does NOT generate text/frames — the app composites them on top.
+ * This ensures crisp pixel-font typography and controllable stats.
  */
 
 import {
   CARD_DIMENSIONS,
   CARD_COLORS,
   DEFAULT_CHARACTER,
+  enforceNameLimit,
+  generateRandomName,
   type CharacterData,
 } from "./types";
 
 /**
+ * Pixel font for card text overlays
+ * VT323 is the official SPRITE FORGE font (per identity.md)
+ * Loaded via Next.js Google Fonts in layout.tsx
+ */
+const CARD_FONT = "VT323, monospace";
+
+/**
  * Load an image from a data URL or URL
+ * @throws Error if image fails to load or src is invalid
  */
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
+    if (!src) {
+      reject(new Error("Cannot load image: source is empty or undefined"));
+      return;
+    }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = () =>
+      reject(new Error("Failed to load image: invalid or inaccessible source"));
     img.src = src;
   });
 }
 
 /**
- * Draw the card background
+ * Draw image with COVER scaling (fills target area, crops overflow)
+ *
+ * FULL-BLEED: The artwork fills the entire canvas edge-to-edge.
+ * No letterboxing, no pillarboxing, no background panels.
+ *
+ * Anchor controls which part of the image is preserved when cropping:
+ * - anchorX: 0 = left edge, 0.5 = center, 1 = right edge
+ * - anchorY: 0 = top edge, 0.5 = center, 1 = bottom edge
+ *
+ * For portraits, use anchorY=0.25 to preserve headroom (top-center crop).
+ *
+ * @param ctx - Canvas 2D context
+ * @param img - Image to draw
+ * @param targetX - Target area X position
+ * @param targetY - Target area Y position
+ * @param targetWidth - Target area width
+ * @param targetHeight - Target area height
+ * @param anchorX - Horizontal anchor (0-1), default 0.5 (center)
+ * @param anchorY - Vertical anchor (0-1), default 0.5 (center)
  */
-function drawBackground(ctx: CanvasRenderingContext2D): void {
-  const { WIDTH, HEIGHT } = CARD_DIMENSIONS;
-
-  // Solid dark background
-  ctx.fillStyle = CARD_COLORS.BACKGROUND;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-  // Subtle grid pattern for retro feel
-  ctx.strokeStyle = "#151515";
-  ctx.lineWidth = 1;
-  const gridSize = 32;
-
-  for (let x = 0; x <= WIDTH; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, HEIGHT);
-    ctx.stroke();
-  }
-
-  for (let y = 0; y <= HEIGHT; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(WIDTH, y);
-    ctx.stroke();
-  }
-}
-
-/**
- * Draw the character image centered in the window
- */
-function drawCharacterImage(
+function drawImageCover(
   ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement
+  img: HTMLImageElement,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+  anchorX: number = 0.5,
+  anchorY: number = 0.5
 ): void {
-  const { IMAGE_WINDOW } = CARD_DIMENSIONS;
-
-  // Calculate scaling to fit image in window (cover, centered)
   const imgAspect = img.width / img.height;
-  const windowAspect = IMAGE_WINDOW.WIDTH / IMAGE_WINDOW.HEIGHT;
+  const targetAspect = targetWidth / targetHeight;
 
   let drawWidth: number;
   let drawHeight: number;
   let offsetX: number;
   let offsetY: number;
 
-  if (imgAspect > windowAspect) {
-    // Image is wider - fit to height, crop sides
-    drawHeight = IMAGE_WINDOW.HEIGHT;
+  // COVER scaling: scale = max(targetW/imgW, targetH/imgH)
+  // This ensures the image covers the entire target area
+  if (imgAspect > targetAspect) {
+    // Image is wider than target - fit to height, crop sides
+    drawHeight = targetHeight;
     drawWidth = drawHeight * imgAspect;
-    offsetX = IMAGE_WINDOW.X + (IMAGE_WINDOW.WIDTH - drawWidth) / 2;
-    offsetY = IMAGE_WINDOW.Y;
+    // Apply horizontal anchor
+    const overflow = drawWidth - targetWidth;
+    offsetX = targetX - overflow * anchorX;
+    offsetY = targetY;
   } else {
-    // Image is taller - fit to width, crop top/bottom
-    drawWidth = IMAGE_WINDOW.WIDTH;
+    // Image is taller than target - fit to width, crop top/bottom
+    drawWidth = targetWidth;
     drawHeight = drawWidth / imgAspect;
-    offsetX = IMAGE_WINDOW.X;
-    offsetY = IMAGE_WINDOW.Y + (IMAGE_WINDOW.HEIGHT - drawHeight) / 2;
+    // Apply vertical anchor
+    const overflow = drawHeight - targetHeight;
+    offsetX = targetX;
+    offsetY = targetY - overflow * anchorY;
   }
 
-  // Clip to window area
+  // Clip to target area (prevents overflow)
   ctx.save();
   ctx.beginPath();
-  ctx.rect(
-    IMAGE_WINDOW.X,
-    IMAGE_WINDOW.Y,
-    IMAGE_WINDOW.WIDTH,
-    IMAGE_WINDOW.HEIGHT
-  );
+  ctx.rect(targetX, targetY, targetWidth, targetHeight);
   ctx.clip();
 
-  // Draw image
+  // Draw image with COVER scaling
   ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
 
   ctx.restore();
 }
 
 /**
+ * Draw the character image FULL-BLEED (covers entire card canvas)
+ *
+ * NO background panels, NO letterboxing.
+ * The AI artwork IS the card background.
+ *
+ * Uses TOP-CENTER anchor (anchorY=0.25) to preserve headroom for portraits.
+ * This prevents cropping the top of heads when the image is taller than the card.
+ */
+function drawCharacterImageFullBleed(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement
+): void {
+  const { WIDTH, HEIGHT } = CARD_DIMENSIONS;
+
+  // Disable image smoothing for crisp pixel art
+  ctx.imageSmoothingEnabled = false;
+  // Vendor prefixes for broader browser support
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ctx as any).mozImageSmoothingEnabled = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ctx as any).webkitImageSmoothingEnabled = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ctx as any).msImageSmoothingEnabled = false;
+
+  // Draw full-bleed with TOP-CENTER anchor to preserve headroom
+  // anchorX=0.5 (center horizontally), anchorY=0.25 (favor top, preserve heads)
+  drawImageCover(ctx, img, 0, 0, WIDTH, HEIGHT, 0.5, 0.25);
+}
+
+/**
  * Draw the card frame overlay (legacy - canvas-drawn)
+ * Phase 0 v2: Simplified frame without header/footer slabs
  */
 function drawFrameLegacy(ctx: CanvasRenderingContext2D): void {
-  const { WIDTH, HEIGHT, IMAGE_WINDOW, BORDER_WIDTH } = CARD_DIMENSIONS;
+  const { WIDTH, HEIGHT, BORDER_WIDTH } = CARD_DIMENSIONS;
 
-  // Outer frame border
+  // Outer frame border only
   ctx.strokeStyle = CARD_COLORS.FRAME_OUTER;
   ctx.lineWidth = BORDER_WIDTH;
   ctx.strokeRect(
@@ -129,61 +174,6 @@ function drawFrameLegacy(ctx: CanvasRenderingContext2D): void {
     WIDTH - BORDER_WIDTH,
     HEIGHT - BORDER_WIDTH
   );
-
-  // Inner frame around image window
-  const frameX = IMAGE_WINDOW.X - BORDER_WIDTH;
-  const frameY = IMAGE_WINDOW.Y - BORDER_WIDTH;
-  const frameW = IMAGE_WINDOW.WIDTH + BORDER_WIDTH * 2;
-  const frameH = IMAGE_WINDOW.HEIGHT + BORDER_WIDTH * 2;
-
-  // Shadow (bottom-right)
-  ctx.strokeStyle = CARD_COLORS.FRAME_SHADOW;
-  ctx.lineWidth = BORDER_WIDTH / 2;
-  ctx.beginPath();
-  ctx.moveTo(frameX + frameW, frameY);
-  ctx.lineTo(frameX + frameW, frameY + frameH);
-  ctx.lineTo(frameX, frameY + frameH);
-  ctx.stroke();
-
-  // Highlight (top-left)
-  ctx.strokeStyle = CARD_COLORS.FRAME_HIGHLIGHT;
-  ctx.beginPath();
-  ctx.moveTo(frameX, frameY + frameH);
-  ctx.lineTo(frameX, frameY);
-  ctx.lineTo(frameX + frameW, frameY);
-  ctx.stroke();
-
-  // Main frame border
-  ctx.strokeStyle = CARD_COLORS.FRAME_OUTER;
-  ctx.lineWidth = BORDER_WIDTH;
-  ctx.strokeRect(frameX, frameY, frameW, frameH);
-
-  // Corner decorations
-  const cornerSize = 24;
-  ctx.fillStyle = CARD_COLORS.FRAME_HIGHLIGHT;
-
-  // Top-left corner
-  ctx.fillRect(frameX - 4, frameY - 4, cornerSize, cornerSize);
-  // Top-right corner
-  ctx.fillRect(frameX + frameW - cornerSize + 4, frameY - 4, cornerSize, cornerSize);
-  // Bottom-left corner
-  ctx.fillRect(frameX - 4, frameY + frameH - cornerSize + 4, cornerSize, cornerSize);
-  // Bottom-right corner
-  ctx.fillRect(
-    frameX + frameW - cornerSize + 4,
-    frameY + frameH - cornerSize + 4,
-    cornerSize,
-    cornerSize
-  );
-
-  // Header area decoration
-  ctx.fillStyle = CARD_COLORS.FRAME_INNER;
-  ctx.fillRect(BORDER_WIDTH * 2, BORDER_WIDTH * 2, WIDTH - BORDER_WIDTH * 4, 120);
-
-  // Header border
-  ctx.strokeStyle = CARD_COLORS.FRAME_OUTER;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(BORDER_WIDTH * 2, BORDER_WIDTH * 2, WIDTH - BORDER_WIDTH * 4, 120);
 }
 
 /**
@@ -200,96 +190,84 @@ async function drawFrameFromAsset(
 }
 
 /**
- * Draw text overlays
+ * Draw card type title at top of card
+ * Phase 0 Final: Just text, no background panel
  */
-function drawTextOverlays(
+function drawCardTypeTitle(
   ctx: CanvasRenderingContext2D,
-  character: CharacterData
+  cardType: string
 ): void {
-  const { WIDTH, TITLE_Y, NAME_Y, CLASS_Y, STATS_Y } = CARD_DIMENSIONS;
-  const centerX = WIDTH / 2;
+  const { WIDTH, TEXT } = CARD_DIMENSIONS;
 
-  // Use pixel font style
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
-  // Title: "SPRITE FORGE"
   ctx.fillStyle = CARD_COLORS.TEXT_ACCENT;
-  ctx.font = "bold 48px monospace";
-  ctx.fillText("SPRITE FORGE", centerX, TITLE_Y);
-
-  // Character name
-  ctx.fillStyle = CARD_COLORS.TEXT_PRIMARY;
-  ctx.font = "bold 56px monospace";
-  ctx.fillText(character.name.toUpperCase(), centerX, NAME_Y);
-
-  // Character class
-  ctx.fillStyle = CARD_COLORS.TEXT_SECONDARY;
-  ctx.font = "32px monospace";
-  ctx.fillText(character.class.toUpperCase(), centerX, CLASS_Y);
-
-  // Stats bars
-  drawStatBars(ctx, character, STATS_Y);
+  ctx.font = `${TEXT.CARD_TYPE_FONT_SIZE}px ${CARD_FONT}`;
+  ctx.fillText(cardType.toUpperCase(), WIDTH / 2, TEXT.CARD_TYPE_Y);
 }
 
 /**
- * Draw stat bars
+ * Draw player name near bottom of card
+ * Phase 0 Final: Just text, no background panel
+ * If name is empty, auto-generates one
  */
-function drawStatBars(
+function drawPlayerName(
   ctx: CanvasRenderingContext2D,
-  character: CharacterData,
-  startY: number
+  name: string
 ): void {
-  const { WIDTH } = CARD_DIMENSIONS;
-  const barWidth = 160;
-  const barHeight = 20;
-  const spacing = 200;
-  const stats = Object.entries(character.stats) as [string, number][];
+  const { WIDTH, TEXT } = CARD_DIMENSIONS;
 
-  // Calculate starting X to center all bars
-  const totalWidth = stats.length * spacing - (spacing - barWidth);
-  const startX = (WIDTH - totalWidth) / 2;
+  // Auto-generate name if empty
+  const displayName = name.trim() || generateRandomName();
+  const finalName = enforceNameLimit(displayName);
 
-  stats.forEach(([stat, value], index) => {
-    const x = startX + index * spacing;
-    const y = startY;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = CARD_COLORS.TEXT_PRIMARY;
+  ctx.font = `${TEXT.NAME_FONT_SIZE}px ${CARD_FONT}`;
+  ctx.fillText(finalName, WIDTH / 2, TEXT.NAME_Y);
+}
 
-    // Stat label
-    ctx.fillStyle = CARD_COLORS.TEXT_SECONDARY;
-    ctx.font = "bold 24px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(stat, x + barWidth / 2, y - 20);
+/**
+ * Draw player stats (POWER, SPEED) in top right corner of image area
+ * Phase 0 Final: Stacked vertically, right-aligned
+ */
+function drawPlayerStats(
+  ctx: CanvasRenderingContext2D,
+  stats: { POWER: number; SPEED: number }
+): void {
+  const { TEXT } = CARD_DIMENSIONS;
 
-    // Bar background
-    ctx.fillStyle = CARD_COLORS.STAT_BAR_BG;
-    ctx.fillRect(x, y, barWidth, barHeight);
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = CARD_COLORS.TEXT_SECONDARY;
+  ctx.font = `${TEXT.STATS_FONT_SIZE}px ${CARD_FONT}`;
 
-    // Bar fill (based on value, max 100)
-    const fillWidth = (value / 100) * barWidth;
-    ctx.fillStyle = CARD_COLORS.STAT_BAR_FILL;
-    ctx.fillRect(x, y, fillWidth, barHeight);
-
-    // Bar border
-    ctx.strokeStyle = CARD_COLORS.FRAME_OUTER;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, barWidth, barHeight);
-
-    // Value text
-    ctx.fillStyle = CARD_COLORS.TEXT_PRIMARY;
-    ctx.font = "bold 18px monospace";
-    ctx.fillText(value.toString(), x + barWidth / 2, y + barHeight + 20);
-  });
+  // Draw POWER and SPEED stacked vertically in top right
+  ctx.fillText(`POWER ${stats.POWER}`, TEXT.STATS_X, TEXT.STATS_Y_POWER);
+  ctx.fillText(`SPEED ${stats.SPEED}`, TEXT.STATS_X, TEXT.STATS_Y_SPEED);
 }
 
 /**
  * Compose a complete Player Card
  *
  * Phase 8: Now supports static frame assets per world
+ * Phase 0 Final: Card type title, player name, and stats (no background panels)
+ *
+ * FULL-BLEED DESIGN:
+ * The AI-generated artwork fills the entire card canvas.
+ * NO app-added backgrounds — the artwork IS the background.
+ *
+ * Draw order (CRITICAL):
+ * 1. Full-bleed character artwork (COVER scaling)
+ * 2. Frame overlay (static PNG per world)
+ * 3. Text overlays (card type, name, stats)
  *
  * @param characterImageSrc - Data URL or URL of the generated character image
- * @param character - Character data for text overlays (optional, uses defaults)
+ * @param character - Character data (cardType, name, stats)
  * @param framePath - Path to static frame PNG (optional, falls back to canvas-drawn frame)
  * @returns Data URL of the composed PNG card
+ * @throws Error if character image is missing or invalid
  */
 export async function composePlayerCard(
   characterImageSrc: string,
@@ -297,6 +275,13 @@ export async function composePlayerCard(
   framePath?: string
 ): Promise<string> {
   const { WIDTH, HEIGHT } = CARD_DIMENSIONS;
+
+  // Validate input — do NOT silently fall back to placeholder
+  if (!characterImageSrc) {
+    throw new Error(
+      "Cannot compose card: character image source is missing or empty"
+    );
+  }
 
   // Create canvas
   const canvas = document.createElement("canvas");
@@ -308,25 +293,30 @@ export async function composePlayerCard(
     throw new Error("Failed to get canvas context");
   }
 
-  // Load character image
+  // Load character image (will throw if invalid)
   const characterImage = await loadImage(characterImageSrc);
 
-  // Compose layers in order
-  // 1. Background
-  drawBackground(ctx);
+  // Compose layers in order (CRITICAL ORDER)
+  // =========================================
 
-  // 2. Character image
-  drawCharacterImage(ctx, characterImage);
+  // 1. FULL-BLEED character artwork (NO background behind it)
+  //    The artwork fills the entire canvas edge-to-edge.
+  //    NO drawBackground() call — we don't want any app-added backgrounds.
+  drawCharacterImageFullBleed(ctx, characterImage);
 
-  // 3. Frame overlay (static asset or legacy canvas-drawn)
+  // 2. Frame overlay (static asset or legacy canvas-drawn)
+  //    Frame is drawn ON TOP of the artwork.
   if (framePath) {
     await drawFrameFromAsset(ctx, framePath);
   } else {
     drawFrameLegacy(ctx);
   }
 
-  // 4. Text overlays
-  drawTextOverlays(ctx, character);
+  // 3. Text overlays (no background panels)
+  //    Text is drawn ON TOP of frame.
+  drawCardTypeTitle(ctx, character.cardType);
+  drawPlayerName(ctx, character.name);
+  drawPlayerStats(ctx, character.stats);
 
   // Export as PNG data URL
   return canvas.toDataURL("image/png");

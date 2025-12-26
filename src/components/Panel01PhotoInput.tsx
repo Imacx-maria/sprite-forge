@@ -1,31 +1,32 @@
 "use client";
 
 /**
- * Panel 01 — Photo Input, World Selection, Generation & Dual Output Screen
+ * Panel 01 — Photo Input, World Selection & Generation Trigger
  *
  * Phase 5: Complete flow from photo to downloadable Player Card
  * Phase 6: World selection for themed generation
  * Phase 8: Dual-output generation (Player Card + World Scene)
+ * Phase 9: Two-step reveal flow (delegates to Panel04/05/06)
  *
  * - Upload photo via file picker or drag-and-drop
  * - Optional webcam capture
  * - Preview selected photo
  * - Select world theme for generation
  * - Generate BOTH pixel-art outputs via OpenRouter API
- * - Display generated results: World Scene + Player Card
- * - Download both outputs as PNG
+ * - Reveal flow handled by Panel04/05/06 components
  * - Per-session generation limit
  */
 
 import { useState, useCallback } from "react";
 import { usePhoto } from "@/context";
-import { getWorld } from "@/lib/worlds";
 import { PhotoUpload } from "./PhotoUpload";
 import { PhotoPreview } from "./PhotoPreview";
 import { WebcamCapture } from "./WebcamCapture";
-import { PlayerCard } from "./PlayerCard";
-import { WorldScene } from "./WorldScene";
 import { WorldSelector } from "./WorldSelector";
+import { NameInput } from "./NameInput";
+import { Panel04WorldSceneReveal } from "./Panel04WorldSceneReveal";
+import { Panel05Transition } from "./Panel05Transition";
+import { Panel06PlayerCardReveal } from "./Panel06PlayerCardReveal";
 
 interface Panel01Props {
   /** Callback to go back to title screen */
@@ -39,29 +40,21 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     goToPanel,
     generatePixelArt,
     isGenerating,
-    generatedImage,
-    generatedCardImage,
-    generatedWorldScene,
+    revealState,
     generationError,
-    cardError,
-    sceneError,
     generationsUsed,
     generationLimit,
     limitReached,
-    clearGeneratedImage,
-    clearAllGeneratedImages,
     clearGenerationError,
     clearPhoto,
     selectedWorld,
     setSelectedWorld,
+    playerName,
+    playerStats,
+    setPlayerName,
+    randomizePlayerIdentity,
   } = usePhoto();
   const [showWebcam, setShowWebcam] = useState(false);
-
-  // Get world info for display
-  const world = getWorld(selectedWorld);
-
-  // Check if any images were generated
-  const hasAnyGeneratedImage = generatedCardImage || generatedWorldScene;
 
   // Check if photo came from webcam
   const isFromWebcam = source === "webcam";
@@ -75,11 +68,6 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     clearGenerationError();
     await generatePixelArt();
   }, [generatePixelArt, clearGenerationError]);
-
-  const handleTryAgain = useCallback(() => {
-    clearAllGeneratedImages();
-    clearGenerationError();
-  }, [clearAllGeneratedImages, clearGenerationError]);
 
   const handleWebcamCapture = useCallback(() => {
     setShowWebcam(false);
@@ -101,106 +89,31 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
     setShowWebcam(false);
   }, [clearPhoto]);
 
-  // Show generated results (Phase 8: World Scene + Player Card)
-  if (hasAnyGeneratedImage) {
-    return (
-      <div className="flex min-h-screen flex-col items-center bg-[#0a0a0a]">
-        <main className="flex w-full max-w-6xl flex-col items-center gap-8 px-8 py-12">
-          {/* Header */}
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
-              YOUR PIXEL LEGEND
-            </h1>
-            <p className="text-lg tracking-wide text-[#888888]">
-              FORGED IN {world.displayName.toUpperCase()}
-            </p>
-          </div>
-
-          {/* World Scene (if generated) */}
-          {generatedWorldScene ? (
-            <div className="w-full">
-              <h2 className="mb-4 text-center text-xl tracking-wide text-[#666666]">
-                WORLD SCENE
-              </h2>
-              <WorldScene
-                sceneImage={generatedWorldScene}
-                worldName={world.displayName}
-              />
-            </div>
-          ) : sceneError ? (
-            <div className="flex flex-col items-center gap-2 rounded border-2 border-yellow-500/50 bg-yellow-500/10 px-6 py-4">
-              <p className="text-sm tracking-wide text-yellow-500">
-                World Scene: {sceneError}
-              </p>
-            </div>
-          ) : null}
-
-          {/* Player Card (if generated) */}
-          {generatedCardImage ? (
-            <div className="mt-4">
-              <h2 className="mb-4 text-center text-xl tracking-wide text-[#666666]">
-                PLAYER CARD
-              </h2>
-              <PlayerCard
-                characterImage={generatedCardImage}
-                framePath={world.framePath}
-              />
-            </div>
-          ) : cardError ? (
-            <div className="flex flex-col items-center gap-2 rounded border-2 border-yellow-500/50 bg-yellow-500/10 px-6 py-4">
-              <p className="text-sm tracking-wide text-yellow-500">
-                Player Card: {cardError}
-              </p>
-            </div>
-          ) : null}
-
-          {/* Generation count */}
-          <p className="text-sm tracking-wide text-[#666666]">
-            GENERATIONS: {generationsUsed} / {generationLimit}
-          </p>
-
-          {/* Actions */}
-          <div className="flex flex-col items-center gap-4">
-            {!limitReached && (
-              <button
-                type="button"
-                onClick={handleTryAgain}
-                className="text-xl tracking-widest text-[#888888] transition-colors hover:text-white"
-              >
-                [ TRY AGAIN ]
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleBack}
-              className="text-lg tracking-wide text-[#666666] transition-colors hover:text-white"
-            >
-              START OVER
-            </button>
-          </div>
-
-          {/* Version footer */}
-          <p className="absolute bottom-8 right-8 text-sm tracking-wide text-[#444444]">
-            v1.0.0
-          </p>
-        </main>
-      </div>
-    );
+  // Phase 9: Two-step reveal flow based on revealState
+  if (revealState === "scene_reveal") {
+    return <Panel04WorldSceneReveal />;
   }
 
-  // Show loading state
-  if (isGenerating) {
+  if (revealState === "transition") {
+    return <Panel05Transition />;
+  }
+
+  if (revealState === "card_reveal") {
+    return <Panel06PlayerCardReveal />;
+  }
+
+  // Show loading state (revealState === "generating")
+  if (isGenerating || revealState === "generating") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a]">
         <main className="flex w-full max-w-4xl flex-col items-center justify-center gap-12 px-8 py-16">
           {/* Header */}
           <div className="flex flex-col items-center gap-4 text-center">
             <h1 className="text-4xl tracking-wider text-white sm:text-5xl">
-              FORGING...
+              GENERATING WORLD...
             </h1>
             <p className="text-lg tracking-wide text-[#888888]">
-              TRANSFORMING YOUR PHOTO INTO PIXEL ART
+              Rendering pixels...
             </p>
           </div>
 
@@ -213,8 +126,9 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
               </span>
               <span className="animate-pulse text-4xl text-white"> ]</span>
             </div>
+            {/* Spec footer message */}
             <p className="text-sm tracking-wide text-[#666666]">
-              THIS MAY TAKE A MOMENT...
+              Good games take time.
             </p>
           </div>
 
@@ -313,6 +227,15 @@ export function Panel01PhotoInput({ onBack }: Panel01Props) {
               <WorldSelector
                 selectedWorldId={selectedWorld}
                 onWorldChange={setSelectedWorld}
+                disabled={isGenerating}
+              />
+
+              {/* Name/Stats Input */}
+              <NameInput
+                name={playerName}
+                stats={playerStats}
+                onNameChange={setPlayerName}
+                onRandomize={randomizePlayerIdentity}
                 disabled={isGenerating}
               />
             </div>

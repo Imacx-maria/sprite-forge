@@ -14,7 +14,7 @@
 
 import { useCallback } from "react";
 import { PhotoProvider, usePhoto } from "@/context";
-import { Panel01PhotoInput } from "@/components";
+import { AccessGate, Panel01PhotoInput } from "@/components";
 
 /**
  * Panel 00 — Title / Attract Screen
@@ -85,11 +85,15 @@ function PanelRouter() {
  *
  * Wraps application with PhotoProvider for state management.
  * All photo data is client-side only, held in memory.
+ *
+ * AccessGate: Phase 0 password protection. Remove in Phase 1.
  */
 export default function SpriteForgeApp() {
   return (
-    <PhotoProvider>
-      <PanelRouter />
-    </PhotoProvider>
+    <AccessGate>
+      <PhotoProvider>
+        <PanelRouter />
+      </PhotoProvider>
+    </AccessGate>
   );
 }
